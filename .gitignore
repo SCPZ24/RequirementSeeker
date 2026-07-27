@@ -1,0 +1,7 @@
+## MacOS
+.DS_store
+
+# Superpowers runtime and worktree artifacts
+.superpowers/
+.worktrees/
+
