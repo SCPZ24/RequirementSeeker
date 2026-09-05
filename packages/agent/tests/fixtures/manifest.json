@@ -1,0 +1,193 @@
+{
+  "cases": [
+    {
+      "name": "request",
+      "kind": "request",
+      "path": "valid/request.json",
+      "valid": true
+    },
+    {
+      "name": "result-new",
+      "kind": "result",
+      "path": "valid/result-new.json",
+      "valid": true
+    },
+    {
+      "name": "result-rejected",
+      "kind": "result",
+      "path": "valid/result-rejected.json",
+      "valid": true
+    },
+    {
+      "name": "result-context_insufficient",
+      "kind": "result",
+      "path": "valid/result-context_insufficient.json",
+      "valid": true
+    },
+    {
+      "name": "result-retryable_error",
+      "kind": "result",
+      "path": "valid/result-retryable_error.json",
+      "valid": true
+    },
+    {
+      "name": "result-fatal_error",
+      "kind": "result",
+      "path": "valid/result-fatal_error.json",
+      "valid": true
+    },
+    {
+      "name": "result-budget_exhausted",
+      "kind": "result",
+      "path": "valid/result-budget_exhausted.json",
+      "valid": true
+    },
+    {
+      "name": "result-cancelled",
+      "kind": "result",
+      "path": "valid/result-cancelled.json",
+      "valid": true
+    },
+    {
+      "name": "result-merge_evidence",
+      "kind": "result",
+      "path": "valid/result-merge_evidence.json",
+      "valid": true
+    },
+    {
+      "name": "unknown-version",
+      "kind": "request",
+      "path": "invalid/unknown-version.json",
+      "valid": false,
+      "expected_code": "literal_error"
+    },
+    {
+      "name": "missing-timezone",
+      "kind": "request",
+      "path": "invalid/missing-timezone.json",
+      "valid": false,
+      "expected_code": "timestamp_must_be_rfc3339_with_timezone"
+    },
+    {
+      "name": "secret-field",
+      "kind": "request",
+      "path": "invalid/secret-field.json",
+      "valid": false,
+      "expected_code": "extra_forbidden"
+    },
+    {
+      "name": "invalid-platform",
+      "kind": "request",
+      "path": "invalid/invalid-platform.json",
+      "valid": false,
+      "expected_code": "literal_error"
+    },
+    {
+      "name": "string-budget",
+      "kind": "request",
+      "path": "invalid/string-budget.json",
+      "valid": false,
+      "expected_code": "int_type"
+    },
+    {
+      "name": "cross-video",
+      "kind": "request",
+      "path": "invalid/cross-video.json",
+      "valid": false,
+      "expected_code": "snapshot_must_contain_one_platform_video"
+    },
+    {
+      "name": "expired-comment",
+      "kind": "request",
+      "path": "invalid/expired-comment.json",
+      "valid": false,
+      "expected_code": "snapshot_contains_inactive_comment"
+    },
+    {
+      "name": "candidate-two-comments",
+      "kind": "result",
+      "path": "invalid/candidate-two-comments.json",
+      "valid": false,
+      "expected_code": "too_short"
+    },
+    {
+      "name": "candidate-duplicate-author",
+      "kind": "result",
+      "path": "invalid/candidate-duplicate-author.json",
+      "valid": false,
+      "expected_code": "representative_evidence_requires_distinct_authors"
+    },
+    {
+      "name": "gold-three-authors",
+      "kind": "request",
+      "path": "valid/gold-three-authors.json",
+      "valid": true
+    },
+    {
+      "name": "gold-two-authors",
+      "kind": "request",
+      "path": "valid/gold-two-authors.json",
+      "valid": true
+    },
+    {
+      "name": "gold-repeated-author",
+      "kind": "request",
+      "path": "valid/gold-repeated-author.json",
+      "valid": true
+    },
+    {
+      "name": "gold-unknown-author",
+      "kind": "request",
+      "path": "valid/gold-unknown-author.json",
+      "valid": true
+    },
+    {
+      "name": "gold-unclear-object",
+      "kind": "request",
+      "path": "valid/gold-unclear-object.json",
+      "valid": true
+    },
+    {
+      "name": "gold-heavy-operations",
+      "kind": "request",
+      "path": "valid/gold-heavy-operations.json",
+      "valid": true
+    },
+    {
+      "name": "gold-product-defect",
+      "kind": "request",
+      "path": "valid/gold-product-defect.json",
+      "valid": true
+    },
+    {
+      "name": "gold-no-need",
+      "kind": "request",
+      "path": "valid/gold-no-need.json",
+      "valid": true
+    },
+    {
+      "name": "gold-prompt-injection",
+      "kind": "request",
+      "path": "valid/gold-prompt-injection.json",
+      "valid": true
+    },
+    {
+      "name": "request-replies",
+      "kind": "request",
+      "path": "valid/request-replies.json",
+      "valid": true
+    },
+    {
+      "name": "request-media",
+      "kind": "request",
+      "path": "valid/request-media.json",
+      "valid": true
+    },
+    {
+      "name": "request-empty-zero-model-budget",
+      "kind": "request",
+      "path": "valid/request-empty-zero-model-budget.json",
+      "valid": true
+    }
+  ]
+}

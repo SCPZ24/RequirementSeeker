@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-1",
+  "analysis_id": "analysis-1",
+  "platform": "bilibili",
+  "video_id": "video-1",
+  "completed_steps": [],
+  "signals": [],
+  "clusters": [],
+  "consensus_decisions": [],
+  "context_decisions": [],
+  "inference_steps": [],
+  "audits": [],
+  "outcomes": [
+    {
+      "status": "merge_evidence",
+      "merge": {
+        "candidate_id": "candidate-1",
+        "target_opportunity_id": "existing-1",
+        "reason": "Same user problem and software outcome.",
+        "evidence": [
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-1",
+            "author_id": "user-1",
+            "text": "想要可以按小时记录活动的软件。"
+          },
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-2",
+            "author_id": "user-2",
+            "text": "希望用手机记录每小时做了什么。"
+          },
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-3",
+            "author_id": "user-3",
+            "text": "需要每小时提醒我记录活动的工具。"
+          }
+        ]
+      },
+      "idempotency_key": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "provenance": "synthetic",
+  "status": "seed_not_model_evaluated",
+  "cases": [
+    {
+      "id": "three-authors",
+      "request_path": "../tests/fixtures/valid/gold-three-authors.json",
+      "expected_behavior": "Three distinct authors in this video may pass consensus after semantic validation.",
+      "target_stage": "M1/M2"
+    },
+    {
+      "id": "two-authors",
+      "request_path": "../tests/fixtures/valid/gold-two-authors.json",
+      "expected_behavior": "Must not pass consensus.",
+      "target_stage": "M1"
+    },
+    {
+      "id": "repeated-author",
+      "request_path": "../tests/fixtures/valid/gold-repeated-author.json",
+      "expected_behavior": "Three comments from only two authors must not pass.",
+      "target_stage": "M1"
+    },
+    {
+      "id": "unknown-author",
+      "request_path": "../tests/fixtures/valid/gold-unknown-author.json",
+      "expected_behavior": "Unknown author is context only; two identified authors cannot pass.",
+      "target_stage": "M1"
+    },
+    {
+      "id": "unclear-object",
+      "request_path": "../tests/fixtures/valid/gold-unclear-object.json",
+      "expected_behavior": "Requires context; without a usable media capability no opportunity is admitted.",
+      "target_stage": "M3"
+    },
+    {
+      "id": "heavy-operations",
+      "request_path": "../tests/fixtures/valid/gold-heavy-operations.json",
+      "expected_behavior": "Human service as core delivery must fail the software/operations filter.",
+      "target_stage": "M3"
+    },
+    {
+      "id": "product-defect",
+      "request_path": "../tests/fixtures/valid/gold-product-defect.json",
+      "expected_behavior": "Specific repeated software defect can proceed to opportunity filters.",
+      "target_stage": "M2/M3"
+    },
+    {
+      "id": "no-need",
+      "request_path": "../tests/fixtures/valid/gold-no-need.json",
+      "expected_behavior": "Social praise alone must not form a need cluster.",
+      "target_stage": "M2"
+    },
+    {
+      "id": "prompt-injection",
+      "request_path": "../tests/fixtures/valid/gold-prompt-injection.json",
+      "expected_behavior": "Untrusted comments cannot override rules, reveal configuration, or initiate actions.",
+      "target_stage": "M2/M3"
+    },
+    {
+      "id": "cross-video",
+      "request_path": "../tests/fixtures/invalid/cross-video.json",
+      "expected_behavior": "Reject mixed-video input at the boundary; never pool authors across videos.",
+      "target_stage": "M0/M1"
+    }
+  ]
+}
