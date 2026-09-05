@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-1",
+  "analysis_id": "analysis-1",
+  "platform": "bilibili",
+  "video_id": "video-1",
+  "completed_steps": [
+    "opportunity"
+  ],
+  "signals": [],
+  "clusters": [],
+  "consensus_decisions": [],
+  "context_decisions": [],
+  "inference_steps": [],
+  "audits": [],
+  "outcomes": [
+    {
+      "status": "new_candidate",
+      "candidate": {
+        "candidate_id": "candidate-1",
+        "cluster_id": "cluster-1",
+        "title": "每小时活动记录工具",
+        "summary": "在手机上快速回顾每天时间用途。",
+        "target_user": "希望改善时间管理的个人",
+        "scenario": "每小时回顾刚完成的活动",
+        "problem": "手工记录容易遗漏",
+        "current_solution": "纸质记录本",
+        "software_shape": "本地活动记录应用",
+        "core_value": "提醒并快速记录活动",
+        "minimal_features": [
+          "每小时提醒",
+          "活动记录"
+        ],
+        "non_heavy_operation_reason": "提醒和记录由软件自动完成",
+        "acquisition_path": "面向讨论按小时记录方法的人群展示手机记录演示",
+        "risks": [
+          "用户是否愿意持续记录尚未验证"
+        ],
+        "evidence": [
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-1",
+            "author_id": "user-1",
+            "text": "想要可以按小时记录活动的软件。"
+          },
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-2",
+            "author_id": "user-1",
+            "text": "希望用手机记录每小时做了什么。"
+          },
+          {
+            "platform": "bilibili",
+            "video_id": "video-1",
+            "comment_id": "comment-3",
+            "author_id": "user-3",
+            "text": "需要每小时提醒我记录活动的工具。"
+          }
+        ]
+      },
+      "idempotency_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
+}

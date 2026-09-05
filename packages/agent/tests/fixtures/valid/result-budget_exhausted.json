@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-1",
+  "analysis_id": "analysis-1",
+  "platform": "bilibili",
+  "video_id": "video-1",
+  "completed_steps": [],
+  "signals": [],
+  "clusters": [],
+  "consensus_decisions": [],
+  "context_decisions": [],
+  "inference_steps": [],
+  "audits": [],
+  "outcomes": [
+    {
+      "status": "budget_exhausted",
+      "step": "signals",
+      "resource": "input_tokens"
+    }
+  ]
+}

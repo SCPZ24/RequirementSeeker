@@ -1,0 +1,480 @@
+{
+  "$defs": {
+    "AnalysisBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_comments": {
+          "default": 200,
+          "exclusiveMinimum": 0,
+          "title": "Max Comments",
+          "type": "integer"
+        },
+        "max_model_calls": {
+          "default": 8,
+          "minimum": 0,
+          "title": "Max Model Calls",
+          "type": "integer"
+        },
+        "max_input_tokens": {
+          "default": 16000,
+          "minimum": 0,
+          "title": "Max Input Tokens",
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "default": 4000,
+          "minimum": 0,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        }
+      },
+      "title": "AnalysisBudget",
+      "type": "object"
+    },
+    "Comment": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "bilibili",
+            "douyin"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "video_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Video Id",
+          "type": "string"
+        },
+        "comment_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Comment Id",
+          "type": "string"
+        },
+        "author_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Author Id"
+        },
+        "parent_comment_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Comment Id"
+        },
+        "text": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Text",
+          "type": "string"
+        },
+        "first_collected_at": {
+          "format": "date-time",
+          "title": "First Collected At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "video_id",
+        "comment_id",
+        "author_id",
+        "parent_comment_id",
+        "text",
+        "first_collected_at",
+        "expires_at"
+      ],
+      "title": "Comment",
+      "type": "object"
+    },
+    "MediaContext": {
+      "additionalProperties": false,
+      "properties": {
+        "context_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Context Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "subtitle",
+            "transcript",
+            "ocr",
+            "frame"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 32000,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Text"
+        },
+        "asset_ref": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset Ref"
+        },
+        "first_collected_at": {
+          "format": "date-time",
+          "title": "First Collected At",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "context_id",
+        "kind",
+        "source_ref",
+        "text",
+        "asset_ref",
+        "first_collected_at",
+        "expires_at"
+      ],
+      "title": "MediaContext",
+      "type": "object"
+    },
+    "ModelConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "config_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Config Ref",
+          "type": "string"
+        },
+        "model_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Model Name",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Revision"
+        },
+        "supports_text": {
+          "title": "Supports Text",
+          "type": "boolean"
+        },
+        "supports_images": {
+          "title": "Supports Images",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "config_ref",
+        "model_name",
+        "revision",
+        "supports_text",
+        "supports_images"
+      ],
+      "title": "ModelConfiguration",
+      "type": "object"
+    },
+    "RetryPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_transport_retries": {
+          "default": 2,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Max Transport Retries",
+          "type": "integer"
+        },
+        "max_output_repairs": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Output Repairs",
+          "type": "integer"
+        }
+      },
+      "title": "RetryPolicy",
+      "type": "object"
+    },
+    "Versions": {
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Rules",
+          "type": "string"
+        },
+        "prompts": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Prompts",
+          "type": "string"
+        },
+        "schema": {
+          "const": "1.0",
+          "title": "Schema",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rules",
+        "prompts",
+        "schema"
+      ],
+      "title": "Versions",
+      "type": "object"
+    },
+    "Video": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "bilibili",
+            "douyin"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "video_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Video Id",
+          "type": "string"
+        },
+        "author_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Author Id"
+        },
+        "title": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 32000,
+          "title": "Description",
+          "type": "string"
+        },
+        "source_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "native_tags": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Native Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "platform",
+        "video_id",
+        "author_id",
+        "title",
+        "description",
+        "source_url",
+        "native_tags"
+      ],
+      "title": "Video",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "retry_of_run_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Retry Of Run Id"
+    },
+    "snapshot_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "snapshot_kind": {
+      "const": "active_video_snapshot",
+      "title": "Snapshot Kind",
+      "type": "string"
+    },
+    "analysis_time": {
+      "format": "date-time",
+      "title": "Analysis Time",
+      "type": "string"
+    },
+    "versions": {
+      "$ref": "#/$defs/Versions"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelConfiguration"
+    },
+    "video": {
+      "$ref": "#/$defs/Video"
+    },
+    "comments": {
+      "items": {
+        "$ref": "#/$defs/Comment"
+      },
+      "title": "Comments",
+      "type": "array"
+    },
+    "media_context": {
+      "items": {
+        "$ref": "#/$defs/MediaContext"
+      },
+      "maxItems": 100,
+      "title": "Media Context",
+      "type": "array"
+    },
+    "history_revision": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "History Revision",
+      "type": "string"
+    },
+    "budget": {
+      "$ref": "#/$defs/AnalysisBudget"
+    },
+    "retry_policy": {
+      "$ref": "#/$defs/RetryPolicy"
+    },
+    "cancellation_requested": {
+      "default": false,
+      "title": "Cancellation Requested",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "retry_of_run_id",
+    "snapshot_id",
+    "snapshot_kind",
+    "analysis_time",
+    "versions",
+    "model",
+    "video",
+    "comments",
+    "media_context",
+    "history_revision",
+    "budget",
+    "retry_policy"
+  ],
+  "title": "AnalysisRequest",
+  "type": "object"
+}
