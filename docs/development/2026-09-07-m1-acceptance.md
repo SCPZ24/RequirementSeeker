@@ -1,9 +1,9 @@
 # M1 确定性共识验收记录
 
 - 日期：2026-09-07。
-- 分支：`codex/agent-m1`；实现基线 `ed94fc6`，集成基线已同步到 M0 `59284c8`。
+- 分支：`codex/agent-m1`；实现基线 `ed94fc6`，M0 基线 `59284c8`，PR #2 合并后的 upstream main 基线 `4a2eb72`。
 - 代码验收提交：`02c6d26`，包含规则、边界测试和公共 API。
-- 状态：实现、验收和 M0 基线同步完成；远端发布状态以当前分支和 PR 页面为准。
+- 状态：实现、验收及 PR #2 合并后的基线同步均已完成；远端发布状态以当前分支和 PR 页面为准。
 
 ## 完成范围
 
@@ -60,4 +60,4 @@ uv run --project packages/agent pytest packages/agent/tests/rules/test_consensus
 | 构建 | `requirementseeker_agent-0.2.0.tar.gz` 与 `requirementseeker_agent-0.2.0-py3-none-any.whl` 成功 |
 | Git 差异 | `git diff --check` 通过；无个人日志、交接或 AGENTS 修改 |
 
-上游 main 与 M0 分支同步门槛已满足；发布后仍需保持 M1 与 M0 的审查范围分离。
+PR #2 已合并，M1 已同步对应 upstream main，并保持为独立 PR #3。相对 upstream main 的 M1 审查范围为 12 个文件，其中第 12 个文件是将总交付计划从旧 M1 状态更新为下一步 M2；本地日志和交接文件不在差异中。
