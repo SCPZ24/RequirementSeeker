@@ -1,6 +1,6 @@
 # Agent v1 输入输出契约
 
-- 状态：M0 初版，用户授权建立；真实采集/宿主接入尚未验收。
+- 状态：M0 契约与 M1 确定性共识规则已实现；真实采集/宿主接入尚未验收。
 - 权威类型：[contracts](../../packages/agent/src/requirementseeker_agent/contracts/)。
 - 导出文件：[请求 Schema](../../packages/agent/schemas/analysis-request.schema.json)、[结果 Schema](../../packages/agent/schemas/analysis-result.schema.json)。
 - 可运行样例：[请求](../../packages/agent/tests/fixtures/valid/request.json)、[新候选结果](../../packages/agent/tests/fixtures/valid/result-new.json)、[全部样例索引](../../packages/agent/tests/fixtures/manifest.json)。
@@ -49,7 +49,22 @@ JSON 使用 UTF-8，版本字段必填且为 `1.0`。标识不得为空或包含
 | `InferenceStep` | 稳定节点 ID、事实/推断类型、标题、完整正文、证据引用；数组顺序即展示顺序 |
 | `ModelInvocationAudit` | 调用 ID、配置/模型、版本、输入哈希、步骤、尝试序号、状态、usage、错误码 |
 
-`Evidence` 保存平台、视频 ID、评论 ID、作者稳定/匿名标识、原始引文。M0 能验证声明的结构和唯一性；M1/M4 必须将这些字段与可信输入比对、排除视频作者并组装正式证据快照。M0 不会验证一段引文是否由模型伪造，也不会执行语义过滤。
+`Evidence` 保存平台、视频 ID、评论 ID、作者稳定/匿名标识、原始引文。M1 从可信 `AnalysisRequest` 复制这些字段，排除视频作者并按作者选择确定性代表评论；调用方不能把模型生成的 Evidence 直接当作准入依据。M1 不执行语义过滤，正式证据快照和历史一致性仍在后续阶段完成。
+
+### M1 确定性共识
+
+`evaluate_consensus(request, cluster)` 只接受已经通过契约校验的单视频有效快照和显式评论簇。它不读取系统时钟、不访问存储或模型，也不修改请求。
+
+| reason_code | passed | 含义 |
+|---|---:|---|
+| `independent_author_threshold_met` | true | 排除无作者和视频作者后，存在至少三位不同作者 |
+| `insufficient_independent_authors` | false | 去除缺失、视频作者和重复作者后不足三人 |
+| `video_author_unknown` | false | 无法证明视频作者已经从评论证据中排除 |
+| `cluster_references_unknown_comment` | false | 簇引用了可信快照中不存在的评论 ID |
+
+每位作者按 `first_collected_at`、`comment_id` 排序选择一条代表评论，使结果不依赖簇成员顺序。通过结果可以包含三位以上作者，但同一作者不会重复计数；失败结果不携带已批准证据。
+
+跨日累积由宿主按稳定评论 ID 组装新的完整有效快照。相同记录重放不能增加作者数，到期正文不得进入新请求，稳定 ID 对应的冲突载荷必须由宿主拒绝。M1 测试使用内存替身验证这些接入语义，不提供生产存储实现。
 
 事实节点必须带引用，推断节点不能冒充事实。节点正文是给用户阅读的结论、依据与限制，不要求收集模型内部思考过程。永久保存前还须根据证据保留策略筛选正文。
 
@@ -72,7 +87,7 @@ JSON 使用 UTF-8，版本字段必填且为 `1.0`。标识不得为空或包含
 
 同一视频可有多个需求簇，允许不同簇的成功与错误共存；宿主应汇总为部分完成等运行状态。结果中的所有代表证据必须属于封装声明的视频和平台。
 
-M0 不执行从请求到结果的分析，不计算幂等键，不入库。结果校验也尚未实现所有跨记录引用与语义一致性检查；后续阶段在提交之前必须完成可信输入核验。测试结果样例仅用于约束数据形状，不能作为真实准入凭据。
+M1 只生成独立的 `ConsensusDecision`，尚未编排完整 `AnalysisResult`，也不计算幂等键或入库。结果校验仍未实现所有跨记录引用与语义一致性检查；后续阶段在提交之前必须完成完整可信输入核验。测试结果样例仅用于约束数据形状，不能作为真实准入凭据。
 
 ## 5. 错误与版本管理
 
