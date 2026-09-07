@@ -1,7 +1,7 @@
 # Agent M2 模型网关、需求信号与聚类设计
 
 - 日期：2026-09-07。
-- 状态：对话设计已批准，书面规格复核中。
+- 状态：对话设计与书面规格均已批准，进入实施计划与 TDD 执行。
 - 基线：upstream main `55e08a6`，包含已合并的 M0/M1。
 - 依据：[Agent 交付计划](../../development/2026-09-05-agent-delivery-plan.md)、[Agent v1 契约](../../contracts/agent-v1.md)、[ADR-001](../../architecture/ADR-001-agent-foundation.md)、[M1 验收记录](../../development/2026-09-07-m1-acceptance.md)。
 
@@ -366,4 +366,4 @@ Prompt、Schema、模型配置或模型版本升级必须重新运行固定回�
 7. 样本达到门槛后实现真实 OpenAI 兼容适配器并运行独立联网评测。
 8. 更新契约、README、验收记录和 Draft PR；M3–M6 不进入同一 PR。
 
-书面规格批准后，下一步使用 `writing-plans` 技能形成逐步 TDD 实施计划。实现计划不得把真实模型未完成项、真实平台未覆盖项或 H1 状态写成已完成。
+实施按 [Agent M2 Implementation Plan](../plans/2026-09-07-agent-m2.md) 的逐步 TDD 任务推进。实现计划不得把真实模型未完成项、真实平台未覆盖项或 H1 状态写成已完成。
