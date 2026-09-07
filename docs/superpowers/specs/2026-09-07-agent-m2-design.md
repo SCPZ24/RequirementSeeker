@@ -61,6 +61,8 @@ flowchart LR
 | `ClusterPipeline` | 合并同视频信号并生成稳定簇 ID | 跨视频拼接或放宽作者门槛 |
 | M1 `evaluate_consensus` | 从可信请求复核作者和原文 | 判断语义是否相同 |
 
+`SamplingPolicy` 在 `AnalysisRequest v1` 创建之前运行：输入是 `SamplingManifest`、同视频候选 `Comment` 列表和 `AnalysisBudget`，输出 `SamplingPlan`。宿主按计划选择的 ID 构造严格的 `AnalysisRequest v1`；M2 管线接收请求时只复核计划、清单和请求一致性，不对已采样请求重复采样。这样原始候选池可以大于 v1 请求的评论上限，同时仍保持 v1 线协议不变。
+
 M2 保持同步 Python API。远程调用可在宿主工作线程运行；实时异步取消和跨进程调度留给 M6。M2 在每个步骤边界及每次模型调用前检查请求中的取消状态和内部取消探针。
 
 ## 4. 配套采样契约
