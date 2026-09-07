@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "requirementseeker-agent"
-version = "0.1.0"
-description = "Offline contracts for the RequirementSeeker Agent module"
+version = "0.2.0"
+description = "Offline contracts and deterministic rules for the RequirementSeeker Agent"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = "MIT"
