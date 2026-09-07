@@ -1,7 +1,30 @@
-## MacOS
-.DS_store
+## macOS
+.DS_Store
 
-# Superpowers runtime and worktree artifacts
+# Local agent/worktree artifacts
 .superpowers/
 .worktrees/
 
+# Python build and development artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+
+# Local credentials and collected data; synthetic fixtures remain tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+cookies*.json
+storage-state*.json
+.local-data/
+.secrets/

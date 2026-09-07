@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-1",
+  "retry_of_run_id": null,
+  "snapshot_id": "snapshot-1",
+  "snapshot_kind": "active_video_snapshot",
+  "analysis_time": "2026-09-05T12:00:00Z",
+  "versions": {
+    "rules": "1",
+    "prompts": "1",
+    "schema": "1.0"
+  },
+  "model": {
+    "config_ref": "local-default",
+    "model_name": "synthetic-model",
+    "revision": null,
+    "supports_text": true,
+    "supports_images": false
+  },
+  "video": {
+    "platform": "bilibili",
+    "video_id": "video-1",
+    "author_id": "creator-1",
+    "title": "按小时记录活动的纸质本",
+    "description": "合成示例，不来自真实平台。",
+    "source_url": "https://example.invalid/videos/1",
+    "native_tags": [
+      "时间记录"
+    ]
+  },
+  "comments": [],
+  "media_context": [],
+  "history_revision": "empty-history-v1",
+  "budget": {
+    "max_comments": 200,
+    "max_model_calls": 0,
+    "max_input_tokens": 0,
+    "max_output_tokens": 0
+  },
+  "retry_policy": {
+    "max_transport_retries": 2,
+    "max_output_repairs": 1
+  },
+  "cancellation_requested": false
+}

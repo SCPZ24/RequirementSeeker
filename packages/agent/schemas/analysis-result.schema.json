@@ -1,0 +1,1024 @@
+{
+  "$defs": {
+    "AnalysisError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Code",
+          "type": "string"
+        },
+        "step": {
+          "enum": [
+            "preprocess",
+            "signals",
+            "cluster",
+            "consensus",
+            "context",
+            "opportunity",
+            "dedup"
+          ],
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "step"
+      ],
+      "title": "AnalysisError",
+      "type": "object"
+    },
+    "BudgetExhausted": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "budget_exhausted",
+          "title": "Status",
+          "type": "string"
+        },
+        "step": {
+          "enum": [
+            "preprocess",
+            "signals",
+            "cluster",
+            "consensus",
+            "context",
+            "opportunity",
+            "dedup"
+          ],
+          "title": "Step",
+          "type": "string"
+        },
+        "resource": {
+          "enum": [
+            "comments",
+            "model_calls",
+            "input_tokens",
+            "output_tokens"
+          ],
+          "title": "Resource",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "step",
+        "resource"
+      ],
+      "title": "BudgetExhausted",
+      "type": "object"
+    },
+    "Cancelled": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "cancelled",
+          "title": "Status",
+          "type": "string"
+        },
+        "step": {
+          "enum": [
+            "preprocess",
+            "signals",
+            "cluster",
+            "consensus",
+            "context",
+            "opportunity",
+            "dedup"
+          ],
+          "title": "Step",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "step"
+      ],
+      "title": "Cancelled",
+      "type": "object"
+    },
+    "ConsensusDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "cluster_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "reason_code": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cluster_id",
+        "passed",
+        "reason_code",
+        "evidence"
+      ],
+      "title": "ConsensusDecision",
+      "type": "object"
+    },
+    "ContextDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "cluster_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "text_sufficient",
+            "media_required",
+            "context_sufficient",
+            "insufficient"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Reason",
+          "type": "string"
+        },
+        "context_refs": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Context Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cluster_id",
+        "status",
+        "reason",
+        "context_refs"
+      ],
+      "title": "ContextDecision",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "bilibili",
+            "douyin"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "video_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Video Id",
+          "type": "string"
+        },
+        "comment_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Comment Id",
+          "type": "string"
+        },
+        "author_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Author Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "video_id",
+        "comment_id",
+        "author_id",
+        "text"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FatalError": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "fatal_error",
+          "title": "Status",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/AnalysisError"
+        }
+      },
+      "required": [
+        "status",
+        "error"
+      ],
+      "title": "FatalError",
+      "type": "object"
+    },
+    "InferenceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Step Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "fact",
+            "inference"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Title",
+          "type": "string"
+        },
+        "body": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Body",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "step_id",
+        "kind",
+        "title",
+        "body",
+        "evidence_refs"
+      ],
+      "title": "InferenceStep",
+      "type": "object"
+    },
+    "InsufficientContext": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "context_insufficient",
+          "title": "Status",
+          "type": "string"
+        },
+        "cluster_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "reason_code": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Reason Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "cluster_id",
+        "reason_code"
+      ],
+      "title": "InsufficientContext",
+      "type": "object"
+    },
+    "MergeEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "merge_evidence",
+          "title": "Status",
+          "type": "string"
+        },
+        "merge": {
+          "$ref": "#/$defs/OpportunityMergeDecision"
+        },
+        "idempotency_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "merge",
+        "idempotency_key"
+      ],
+      "title": "MergeEvidence",
+      "type": "object"
+    },
+    "ModelInvocationAudit": {
+      "additionalProperties": false,
+      "properties": {
+        "invocation_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Invocation Id",
+          "type": "string"
+        },
+        "model_config_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Model Config Ref",
+          "type": "string"
+        },
+        "model_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Model Name",
+          "type": "string"
+        },
+        "versions": {
+          "$ref": "#/$defs/Versions"
+        },
+        "input_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Hash",
+          "type": "string"
+        },
+        "step": {
+          "enum": [
+            "preprocess",
+            "signals",
+            "cluster",
+            "consensus",
+            "context",
+            "opportunity",
+            "dedup"
+          ],
+          "title": "Step",
+          "type": "string"
+        },
+        "attempt": {
+          "exclusiveMinimum": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "success",
+            "error",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error Code"
+        }
+      },
+      "required": [
+        "invocation_id",
+        "model_config_ref",
+        "model_name",
+        "versions",
+        "input_hash",
+        "step",
+        "attempt",
+        "status",
+        "usage",
+        "error_code"
+      ],
+      "title": "ModelInvocationAudit",
+      "type": "object"
+    },
+    "NeedCluster": {
+      "additionalProperties": false,
+      "properties": {
+        "cluster_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "comment_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "pattern": "^\\S+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Comment Ids",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cluster_id",
+        "comment_ids",
+        "summary"
+      ],
+      "title": "NeedCluster",
+      "type": "object"
+    },
+    "NeedSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "signal_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Signal Id",
+          "type": "string"
+        },
+        "comment_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Comment Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "pain",
+            "need",
+            "alternative",
+            "product_defect"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "signal_id",
+        "comment_id",
+        "kind",
+        "summary"
+      ],
+      "title": "NeedSignal",
+      "type": "object"
+    },
+    "NewCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "new_candidate",
+          "title": "Status",
+          "type": "string"
+        },
+        "candidate": {
+          "$ref": "#/$defs/OpportunityCandidate"
+        },
+        "idempotency_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "candidate",
+        "idempotency_key"
+      ],
+      "title": "NewCandidate",
+      "type": "object"
+    },
+    "OpportunityCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "cluster_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Summary",
+          "type": "string"
+        },
+        "target_user": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Target User",
+          "type": "string"
+        },
+        "scenario": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Scenario",
+          "type": "string"
+        },
+        "problem": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Problem",
+          "type": "string"
+        },
+        "current_solution": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Current Solution",
+          "type": "string"
+        },
+        "software_shape": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Software Shape",
+          "type": "string"
+        },
+        "core_value": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Core Value",
+          "type": "string"
+        },
+        "minimal_features": {
+          "items": {
+            "maxLength": 32000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Minimal Features",
+          "type": "array"
+        },
+        "non_heavy_operation_reason": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Non Heavy Operation Reason",
+          "type": "string"
+        },
+        "acquisition_path": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Acquisition Path",
+          "type": "string"
+        },
+        "risks": {
+          "items": {
+            "maxLength": 32000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Risks",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 3,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "cluster_id",
+        "title",
+        "summary",
+        "target_user",
+        "scenario",
+        "problem",
+        "current_solution",
+        "software_shape",
+        "core_value",
+        "minimal_features",
+        "non_heavy_operation_reason",
+        "acquisition_path",
+        "risks",
+        "evidence"
+      ],
+      "title": "OpportunityCandidate",
+      "type": "object"
+    },
+    "OpportunityMergeDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "target_opportunity_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Target Opportunity Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Reason",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 3,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "target_opportunity_id",
+        "reason",
+        "evidence"
+      ],
+      "title": "OpportunityMergeDecision",
+      "type": "object"
+    },
+    "Rejected": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "rejected",
+          "title": "Status",
+          "type": "string"
+        },
+        "cluster_id": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cluster Id"
+        },
+        "reason_code": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Reason Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "cluster_id",
+        "reason_code"
+      ],
+      "title": "Rejected",
+      "type": "object"
+    },
+    "RetryableError": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "retryable_error",
+          "title": "Status",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/AnalysisError"
+        }
+      },
+      "required": [
+        "status",
+        "error"
+      ],
+      "title": "RetryableError",
+      "type": "object"
+    },
+    "TokenUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "total_tokens": {
+          "minimum": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "title": "TokenUsage",
+      "type": "object"
+    },
+    "Versions": {
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Rules",
+          "type": "string"
+        },
+        "prompts": {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^\\S+$",
+          "title": "Prompts",
+          "type": "string"
+        },
+        "schema": {
+          "const": "1.0",
+          "title": "Schema",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rules",
+        "prompts",
+        "schema"
+      ],
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "analysis_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "bilibili",
+        "douyin"
+      ],
+      "title": "Platform",
+      "type": "string"
+    },
+    "video_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "title": "Video Id",
+      "type": "string"
+    },
+    "completed_steps": {
+      "items": {
+        "enum": [
+          "preprocess",
+          "signals",
+          "cluster",
+          "consensus",
+          "context",
+          "opportunity",
+          "dedup"
+        ],
+        "type": "string"
+      },
+      "title": "Completed Steps",
+      "type": "array"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/NeedSignal"
+      },
+      "title": "Signals",
+      "type": "array"
+    },
+    "clusters": {
+      "items": {
+        "$ref": "#/$defs/NeedCluster"
+      },
+      "title": "Clusters",
+      "type": "array"
+    },
+    "consensus_decisions": {
+      "items": {
+        "$ref": "#/$defs/ConsensusDecision"
+      },
+      "title": "Consensus Decisions",
+      "type": "array"
+    },
+    "context_decisions": {
+      "items": {
+        "$ref": "#/$defs/ContextDecision"
+      },
+      "title": "Context Decisions",
+      "type": "array"
+    },
+    "inference_steps": {
+      "items": {
+        "$ref": "#/$defs/InferenceStep"
+      },
+      "title": "Inference Steps",
+      "type": "array"
+    },
+    "audits": {
+      "items": {
+        "$ref": "#/$defs/ModelInvocationAudit"
+      },
+      "title": "Audits",
+      "type": "array"
+    },
+    "outcomes": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "budget_exhausted": "#/$defs/BudgetExhausted",
+            "cancelled": "#/$defs/Cancelled",
+            "context_insufficient": "#/$defs/InsufficientContext",
+            "fatal_error": "#/$defs/FatalError",
+            "merge_evidence": "#/$defs/MergeEvidence",
+            "new_candidate": "#/$defs/NewCandidate",
+            "rejected": "#/$defs/Rejected",
+            "retryable_error": "#/$defs/RetryableError"
+          },
+          "propertyName": "status"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/NewCandidate"
+          },
+          {
+            "$ref": "#/$defs/MergeEvidence"
+          },
+          {
+            "$ref": "#/$defs/Rejected"
+          },
+          {
+            "$ref": "#/$defs/InsufficientContext"
+          },
+          {
+            "$ref": "#/$defs/RetryableError"
+          },
+          {
+            "$ref": "#/$defs/FatalError"
+          },
+          {
+            "$ref": "#/$defs/BudgetExhausted"
+          },
+          {
+            "$ref": "#/$defs/Cancelled"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Outcomes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "analysis_id",
+    "platform",
+    "video_id",
+    "completed_steps",
+    "signals",
+    "clusters",
+    "consensus_decisions",
+    "context_decisions",
+    "inference_steps",
+    "audits",
+    "outcomes"
+  ],
+  "title": "AnalysisResult",
+  "type": "object"
+}

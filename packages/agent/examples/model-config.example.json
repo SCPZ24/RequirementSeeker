@@ -1,0 +1,7 @@
+{
+  "config_ref": "local-default",
+  "model_name": "synthetic-model",
+  "revision": null,
+  "supports_text": true,
+  "supports_images": false
+}

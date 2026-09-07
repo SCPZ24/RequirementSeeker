@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-1",
+  "retry_of_run_id": null,
+  "snapshot_id": "snapshot-1",
+  "snapshot_kind": "active_video_snapshot",
+  "analysis_time": "2026-09-05T12:00:00Z",
+  "versions": {
+    "rules": "1",
+    "prompts": "1",
+    "schema": "1.0"
+  },
+  "model": {
+    "config_ref": "local-default",
+    "model_name": "synthetic-model",
+    "revision": null,
+    "supports_text": true,
+    "supports_images": false
+  },
+  "video": {
+    "platform": "bilibili",
+    "video_id": "video-1",
+    "author_id": "creator-1",
+    "title": "按小时记录活动的纸质本",
+    "description": "合成示例，不来自真实平台。",
+    "source_url": "https://example.invalid/videos/1",
+    "native_tags": [
+      "时间记录"
+    ]
+  },
+  "comments": [
+    {
+      "platform": "bilibili",
+      "video_id": "video-1",
+      "comment_id": "comment-1",
+      "author_id": "user-1",
+      "parent_comment_id": null,
+      "text": "想要可以按小时记录活动的软件。",
+      "first_collected_at": "2026-09-05T00:00:00Z",
+      "expires_at": "2026-09-15T00:00:00Z"
+    },
+    {
+      "platform": "bilibili",
+      "video_id": "video-1",
+      "comment_id": "comment-2",
+      "author_id": "user-2",
+      "parent_comment_id": null,
+      "text": "希望用手机记录每小时做了什么。",
+      "first_collected_at": "2026-09-05T00:00:00Z",
+      "expires_at": "2026-09-15T00:00:00Z"
+    },
+    {
+      "platform": "bilibili",
+      "video_id": "video-1",
+      "comment_id": "comment-3",
+      "author_id": "user-3",
+      "parent_comment_id": null,
+      "text": "需要每小时提醒我记录活动的工具。",
+      "first_collected_at": "2026-09-05T00:00:00Z",
+      "expires_at": "2026-09-15T00:00:00Z"
+    }
+  ],
+  "media_context": [],
+  "history_revision": "empty-history-v1",
+  "budget": {
+    "max_comments": 200,
+    "max_model_calls": "8",
+    "max_input_tokens": 16000,
+    "max_output_tokens": 4000
+  },
+  "retry_policy": {
+    "max_transport_retries": 2,
+    "max_output_repairs": 1
+  },
+  "cancellation_requested": false
+}
