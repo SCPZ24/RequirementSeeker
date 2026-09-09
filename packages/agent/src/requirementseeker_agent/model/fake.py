@@ -1,4 +1,4 @@
-"""Deterministic model scenarios for offline control-flow and boundary tests."""
+"""用于离线控制流与边界测试的确定性场景模型。"""
 
 import hashlib
 import json
@@ -13,6 +13,7 @@ from .types import (
     ModelGatewayError,
 )
 
+# 每个场景同时固定错误码和可重试性，避免测试依赖随机网络行为。
 _ERRORS: dict[str, tuple[GatewayErrorCode, bool]] = {
     "timeout": ("timeout", True),
     "rate_limited": ("rate_limited", True),
@@ -22,6 +23,7 @@ _ERRORS: dict[str, tuple[GatewayErrorCode, bool]] = {
     "cancelled": ("cancelled", False),
 }
 
+# 这里故意保留多种非法载荷，用于验证真实模型接入前后的防线一致。
 _PAYLOADS: dict[str, object] = {
     "valid_signals": {
         "signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]
@@ -62,6 +64,8 @@ _PAYLOADS: dict[str, object] = {
 
 
 def _fingerprint(request: ModelCallRequest) -> str:
+    """对规范化请求取摘要，让相同输入产生稳定的审计标识。"""
+
     payload = json.dumps(
         request.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()
@@ -69,7 +73,7 @@ def _fingerprint(request: ModelCallRequest) -> str:
 
 
 class ScenarioModelGateway:
-    """Return explicit fixture outcomes while implementing the production gateway port."""
+    """按 scenario_id 返回固定结果，同时实现生产适配器使用的同一端口。"""
 
     @property
     def capabilities(self) -> ModelCapabilities:
@@ -88,6 +92,7 @@ class ScenarioModelGateway:
             code, retryable = _ERRORS[scenario]
             raise ModelGatewayError(code, retryable=retryable)
         if scenario == "repair_success":
+            # 首次返回结构错误，第二次才成功，用来覆盖“最多一次修复”的控制流。
             payload: object = (
                 _PAYLOADS["missing_fields"] if request.attempt == 1 else _PAYLOADS["valid_signals"]
             )
@@ -96,6 +101,7 @@ class ScenarioModelGateway:
         else:
             raise ModelGatewayError("invalid_configuration", retryable=False)
 
+        # usage_missing 模拟供应商没有返回用量；预算账本必须按预留上限结算。
         usage = None
         if scenario != "usage_missing":
             usage = TokenUsage(input_tokens=100, output_tokens=20, total_tokens=120)

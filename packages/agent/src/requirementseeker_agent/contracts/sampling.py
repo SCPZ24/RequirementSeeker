@@ -1,4 +1,4 @@
-"""Versioned sampling metadata kept separate from the AnalysisRequest v1 wire contract."""
+"""独立于 AnalysisRequest v1 的版本化采样元数据契约。"""
 
 from typing import Literal, Self
 
@@ -26,7 +26,7 @@ VideoDirection = Literal[
 
 
 class VideoMetrics(Contract):
-    """Optional secondary observations; none of these bypasses the comment-quality gate."""
+    """视频的可选辅助指标；这些指标不能绕过评论数据质量门。"""
 
     views: NonNegativeInt | None = None
     likes: NonNegativeInt | None = None
@@ -37,7 +37,7 @@ class VideoMetrics(Contract):
 
 
 class SamplingManifest(Contract):
-    """Describe how one video's candidate comment pool was collected."""
+    """描述单个视频候选评论池的采集结果及其可审计来源。"""
 
     sampling_schema_version: Literal["1.0"]
     manifest_id: Identifier
@@ -61,6 +61,9 @@ class SamplingManifest(Contract):
 
     @model_validator(mode="after")
     def integrity(self) -> Self:
+        """拒绝不可能的计数以及无法追溯到候选池的分层引用。"""
+
+        # 先校验采集统计，避免下游把自相矛盾的完整率当成可信依据。
         if self.pages_succeeded > self.pages_requested:
             raise ValueError("successful_pages_exceed_requested_pages")
         if self.author_id_present > self.collected_total:
@@ -74,6 +77,8 @@ class SamplingManifest(Contract):
             raise ValueError("candidate_comment_ids_must_be_unique")
         if len(self.candidate_comment_ids) > self.collected_total:
             raise ValueError("candidate_pool_exceeds_collected_total")
+
+        # 每个分层都必须来自同一候选池；同一评论可跨层出现，但层内不可重复。
         if set(self.stratum_comment_ids) != self.available_strata:
             raise ValueError("stratum_keys_must_match_available_strata")
         candidates = set(self.candidate_comment_ids)

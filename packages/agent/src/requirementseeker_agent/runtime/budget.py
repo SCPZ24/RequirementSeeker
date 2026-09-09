@@ -1,4 +1,4 @@
-"""Conservative single-run budget reservation and settlement."""
+"""单次分析运行使用的保守预算预留与结算账本。"""
 
 from dataclasses import dataclass
 from typing import Literal
@@ -10,6 +10,8 @@ BudgetResource = Literal["comments", "model_calls", "input_tokens", "output_toke
 
 
 class BudgetLimitExceeded(RuntimeError):
+    """指出哪一种运行资源已经超过硬上限。"""
+
     def __init__(self, resource: BudgetResource) -> None:
         super().__init__(resource)
         self.resource = resource
@@ -17,6 +19,8 @@ class BudgetLimitExceeded(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class Reservation:
+    """一次尚未结算的模型调用预算。"""
+
     reservation_id: int
     input_tokens: int
     output_tokens: int
@@ -24,6 +28,8 @@ class Reservation:
 
 @dataclass(frozen=True, slots=True)
 class BudgetSnapshot:
+    """同时展示已消费与仍被占用的预算。"""
+
     comments_consumed: int
     model_calls_consumed: int
     input_tokens_consumed: int
@@ -34,6 +40,8 @@ class BudgetSnapshot:
 
 
 class BudgetLedger:
+    """先预留最坏用量，调用结束后再按可信 usage 结算。"""
+
     def __init__(self, limits: AnalysisBudget) -> None:
         self._limits = limits
         self._comments = 0
@@ -48,6 +56,8 @@ class BudgetLedger:
         return cls(budget)
 
     def consume_comments(self, count: int) -> None:
+        """登记本次运行已接纳的评论数。"""
+
         if count < 0:
             raise ValueError("comment_consumption_must_be_non_negative")
         if self._comments + count > self._limits.max_comments:
@@ -55,6 +65,8 @@ class BudgetLedger:
         self._comments += count
 
     def reserve(self, *, input_tokens: int, output_tokens: int) -> Reservation:
+        """在调用前原子检查并占用一次调用及其 Token 上限。"""
+
         if input_tokens < 0 or output_tokens < 0:
             raise ValueError("token_reservation_must_be_non_negative")
         reserved_calls = len(self._active)
@@ -72,6 +84,9 @@ class BudgetLedger:
         return reservation
 
     def settle(self, reservation: Reservation, usage: TokenUsage | None) -> None:
+        """完成一次调用；缺少 usage 时按原预留量保守记账。"""
+
+        # 必须先确认仍为当前预留，再删除，防止重复或伪造结算消耗预算。
         active = self._active.get(reservation.reservation_id)
         if active != reservation:
             raise ValueError("reservation_not_active")
@@ -81,6 +96,8 @@ class BudgetLedger:
         self._output += reservation.output_tokens if usage is None else usage.output_tokens
 
     def snapshot(self) -> BudgetSnapshot:
+        """返回不可变快照，供审计和停止条件判断。"""
+
         return BudgetSnapshot(
             comments_consumed=self._comments,
             model_calls_consumed=self._calls,

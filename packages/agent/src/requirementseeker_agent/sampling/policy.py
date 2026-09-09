@@ -1,4 +1,4 @@
-"""Deterministic comment-quality gate and pre-request sampling policy."""
+"""确定性的评论质量门与请求创建前采样策略。"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -18,7 +18,7 @@ _DIRECTION_FACTORS: dict[VideoDirection, float] = {
     "software_tool": 1.10,
     "tutorial_workflow": 1.10,
     "life_service": 1.00,
-    # Treat the combined category as promotion until real data can separate it.
+    # 当前契约无法拆分电商与营销，真实样本足够前按推广类采用保守系数。
     "ecommerce_marketing": 0.90,
     "entertainment_culture": 0.90,
     "unknown": 1.00,
@@ -27,11 +27,13 @@ QualityStatus = Literal["usable", "degraded", "insufficient"]
 
 
 class SamplingDataInsufficient(ValueError):
-    """The collection is too incomplete for automatic semantic admission."""
+    """采集数据不完整，不能自动进入语义分析。"""
 
 
 @dataclass(frozen=True, slots=True)
 class SamplingQuality:
+    """只由可复算的采集统计得到的数据质量结论。"""
+
     status: QualityStatus
     target_completion: float
     page_success_rate: float
@@ -41,6 +43,8 @@ class SamplingQuality:
 
 @dataclass(frozen=True, slots=True)
 class SamplingPlan:
+    """宿主构造 AnalysisRequest v1 前使用的确定性采样结果。"""
+
     policy_version: str
     manifest_id: str
     platform: str
@@ -55,7 +59,7 @@ class SamplingPlan:
 
 
 def assess_quality(manifest: SamplingManifest) -> SamplingQuality:
-    """Classify deterministic collection measurements without semantic guesses."""
+    """仅依据确定性采集指标分级，不在此处做语义推测。"""
     completion = min(manifest.collected_total / max(manifest.collection_target, 1), 1.0)
     page_rate = manifest.pages_succeeded / max(manifest.pages_requested, 1)
     author_rate = manifest.author_id_present / max(manifest.collected_total, 1)
@@ -86,7 +90,7 @@ def assess_quality(manifest: SamplingManifest) -> SamplingQuality:
 def dynamic_target(
     population: int, max_comments: int, direction_factor: float, quality_factor: float
 ) -> int:
-    """Apply the approved logarithmic coverage formula and hard comment cap."""
+    """应用已批准的对数覆盖公式，同时遵守评论数量硬上限。"""
     if population <= 0 or max_comments <= 0:
         return 0
     base = min(population, ceil(32 + 14 * log2(population)), max_comments)
@@ -94,6 +98,8 @@ def dynamic_target(
 
 
 def _quotas(target: int) -> dict[SamplingStratum, int]:
+    """按最大余数法分配整数配额，固定同余时的层级顺序。"""
+
     exact = {name: target * _STRATUM_WEIGHTS[name] for name in _STRATA}
     quotas = {name: floor(exact[name]) for name in _STRATA}
     remaining = target - sum(quotas.values())
@@ -106,6 +112,8 @@ def _quotas(target: int) -> dict[SamplingStratum, int]:
 
 
 def _validate_candidates(manifest: SamplingManifest, comments: Sequence[Comment]) -> None:
+    """确认调用方传入的评论与清单声明的是同一份候选池。"""
+
     ids = [comment.comment_id for comment in comments]
     if len(ids) != len(set(ids)) or set(ids) != set(manifest.candidate_comment_ids):
         raise ValueError("candidate_comments_must_match_manifest")
@@ -121,12 +129,13 @@ def plan_sampling(
     candidate_comments: Sequence[Comment],
     budget: AnalysisBudget,
 ) -> SamplingPlan:
-    """Select stable comment IDs before the host constructs AnalysisRequest v1."""
+    """在宿主构造 AnalysisRequest v1 前选出稳定的评论 ID。"""
     _validate_candidates(manifest, candidate_comments)
     quality = assess_quality(manifest)
     if quality.status == "insufficient":
         raise SamplingDataInsufficient("sampling_data_insufficient")
 
+    # 平台未提供评论总量时，只能以本次采集到的候选池作为可见总体。
     unknown_population = manifest.reported_total is None
     population = (
         len(candidate_comments) if manifest.reported_total is None else manifest.reported_total
@@ -149,12 +158,14 @@ def plan_sampling(
     selected: set[str] = set()
     selected_by: dict[SamplingStratum, list[str]] = {name: [] for name in _STRATA}
     quotas = _quotas(target)
+    # 第一轮满足各层配额；排序确保输入顺序变化不会改变结果。
     for name in _STRATA:
         for comment_id in sorted(manifest.stratum_comment_ids.get(name, [])):
             if comment_id not in selected and len(selected_by[name]) < quotas[name]:
                 selected.add(comment_id)
                 selected_by[name].append(comment_id)
 
+    # 某层样本不足时按固定次序补位，同时用集合避免跨层重复选中。
     for name in _REFILL_ORDER:
         for comment_id in sorted(manifest.stratum_comment_ids.get(name, [])):
             if len(selected) == target:
