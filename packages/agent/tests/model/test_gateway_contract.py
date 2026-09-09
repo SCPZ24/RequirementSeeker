@@ -42,6 +42,7 @@ def make_call(scenario_id: str, *, attempt: int = 1) -> ModelCallRequest:
 def assert_gateway_conformance(gateway: ModelGateway) -> None:
     assert gateway.capabilities.supports_text is True
     assert gateway.capabilities.supports_structured_output is True
+    assert gateway.capabilities.max_input_tokens_per_call == 4096
     response = gateway.invoke(make_call("valid_signals"))
     assert response.payload == {
         "signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]

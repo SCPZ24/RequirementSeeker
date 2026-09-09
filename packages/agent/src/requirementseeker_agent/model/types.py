@@ -30,6 +30,7 @@ class ModelCapabilities(Contract):
     supports_text: StrictBool
     supports_structured_output: StrictBool
     supports_images: StrictBool
+    max_input_tokens_per_call: PositiveInt
 
 
 class ControlledContentBlock(Contract):

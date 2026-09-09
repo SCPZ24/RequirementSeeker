@@ -77,6 +77,7 @@ class ScenarioModelGateway:
             supports_text=True,
             supports_structured_output=True,
             supports_images=False,
+            max_input_tokens_per_call=4096,
         )
 
     def invoke(self, request: ModelCallRequest) -> ModelCallResponse:
