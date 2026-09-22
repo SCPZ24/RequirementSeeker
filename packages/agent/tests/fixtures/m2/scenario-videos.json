@@ -1,0 +1,104 @@
+{
+  "fixture_kind": "synthetic_invariant",
+  "records": [
+    {
+      "video_id": "video-1",
+      "comment_id": "c1",
+      "predicted_signal": true,
+      "gold_signal": true,
+      "predicted_cluster_id": "predicted-a",
+      "gold_cluster_id": "gold-a",
+      "adjudication": "adjudicated",
+      "reference_status": "valid",
+      "reference_accepted": true
+    },
+    {
+      "video_id": "video-1",
+      "comment_id": "c2",
+      "predicted_signal": true,
+      "gold_signal": true,
+      "predicted_cluster_id": "predicted-a",
+      "gold_cluster_id": "gold-a",
+      "adjudication": "adjudicated",
+      "reference_status": "valid",
+      "reference_accepted": true
+    },
+    {
+      "video_id": "video-1",
+      "comment_id": "c3",
+      "predicted_signal": true,
+      "gold_signal": false,
+      "predicted_cluster_id": "predicted-a",
+      "gold_cluster_id": "gold-pending",
+      "adjudication": "disputed_pending",
+      "reference_status": "valid",
+      "reference_accepted": true
+    },
+    {
+      "video_id": "video-2",
+      "comment_id": "c4",
+      "predicted_signal": true,
+      "gold_signal": true,
+      "predicted_cluster_id": "predicted-b",
+      "gold_cluster_id": "gold-b",
+      "adjudication": "adjudicated",
+      "reference_status": "valid",
+      "reference_accepted": true
+    },
+    {
+      "video_id": "video-2",
+      "comment_id": "c5",
+      "predicted_signal": true,
+      "gold_signal": true,
+      "predicted_cluster_id": "predicted-b",
+      "gold_cluster_id": "gold-b",
+      "adjudication": "adjudicated",
+      "reference_status": "valid",
+      "reference_accepted": true
+    },
+    {
+      "video_id": "video-2",
+      "comment_id": "c6",
+      "predicted_signal": false,
+      "gold_signal": false,
+      "predicted_cluster_id": null,
+      "gold_cluster_id": null,
+      "adjudication": "adjudicated",
+      "reference_status": "unknown",
+      "reference_accepted": false
+    },
+    {
+      "video_id": "video-3",
+      "comment_id": "c7",
+      "predicted_signal": false,
+      "gold_signal": false,
+      "predicted_cluster_id": null,
+      "gold_cluster_id": null,
+      "adjudication": "adjudicated",
+      "reference_status": "cross_video",
+      "reference_accepted": false
+    },
+    {
+      "video_id": "video-3",
+      "comment_id": "c8",
+      "predicted_signal": false,
+      "gold_signal": false,
+      "predicted_cluster_id": null,
+      "gold_cluster_id": null,
+      "adjudication": "adjudicated",
+      "reference_status": "tampered",
+      "reference_accepted": false
+    },
+    {
+      "video_id": "video-3",
+      "comment_id": "c9",
+      "predicted_signal": false,
+      "gold_signal": false,
+      "predicted_cluster_id": null,
+      "gold_cluster_id": null,
+      "adjudication": "adjudicated",
+      "reference_status": "nonexistent",
+      "reference_accepted": false
+    }
+  ]
+}
