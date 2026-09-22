@@ -75,6 +75,9 @@ def _fingerprint(request: ModelCallRequest) -> str:
 class ScenarioModelGateway:
     """按 scenario_id 返回固定结果，同时实现生产适配器使用的同一端口。"""
 
+    def __init__(self, scenario_id: str | None = None) -> None:
+        self._scenario_id = scenario_id
+
     @property
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
@@ -85,15 +88,33 @@ class ScenarioModelGateway:
         )
 
     def invoke(self, request: ModelCallRequest) -> ModelCallResponse:
-        scenario = request.scenario_id
+        scenario = request.scenario_id or self._scenario_id
         if scenario is None:
             raise ModelGatewayError("invalid_configuration", retryable=False)
         if scenario in _ERRORS:
             code, retryable = _ERRORS[scenario]
             raise ModelGatewayError(code, retryable=retryable)
-        if scenario == "repair_success":
+        payload: object
+        if scenario in {"valid_pipeline", "repair_pipeline"}:
+            payload = (
+                {
+                    "signals": [
+                        {"comment_id": comment_id, "kind": "need", "summary": "批量导出"}
+                        for comment_id in ("c1", "c2", "c3")
+                    ]
+                }
+                if request.stage == "signals"
+                else _PAYLOADS["valid_clusters"]
+            )
+            if (
+                scenario == "repair_pipeline"
+                and request.stage == "signals"
+                and request.attempt == 1
+            ):
+                payload = _PAYLOADS["missing_fields"]
+        elif scenario == "repair_success":
             # 首次返回结构错误，第二次才成功，用来覆盖“最多一次修复”的控制流。
-            payload: object = (
+            payload = (
                 _PAYLOADS["missing_fields"] if request.attempt == 1 else _PAYLOADS["valid_signals"]
             )
         elif scenario in _PAYLOADS:

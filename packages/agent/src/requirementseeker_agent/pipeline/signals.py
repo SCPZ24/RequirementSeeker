@@ -14,7 +14,7 @@ from ..contracts.common import Contract, Identifier, Text
 from ..contracts.requests import AnalysisRequest, Comment
 from ..model.types import ControlledContentBlock, ModelCallRequest, ModelGateway
 from ..runtime.budget import BudgetLedger
-from .batching import CommentBatch
+from .batching import CommentBatch, estimate_text_tokens
 from .invocation import (
     CancellationProbe,
     InvocationCancelled,
@@ -77,6 +77,26 @@ def stable_signal_id(comment_id: str, kind: str, summary: str, prompt_version: s
 
     value = "\x1f".join((comment_id, kind, normalize_summary(summary), prompt_version))
     return f"sig_{hashlib.sha256(value.encode()).hexdigest()[:24]}"
+
+
+def signal_fixed_input_tokens(request: AnalysisRequest) -> int:
+    """估算每个信号批次固定携带的 Prompt、视频与 Schema 开销。"""
+
+    source = {
+        "video": {
+            "platform": request.video.platform,
+            "video_id": request.video.video_id,
+            "title": request.video.title,
+            "description": request.video.description,
+        },
+        "comments": [],
+    }
+    untrusted = (
+        "UNTRUSTED_VIDEO_DATA\n"
+        + json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\nEND_UNTRUSTED_VIDEO_DATA"
+    )
+    return estimate_text_tokens(f"{_SYSTEM_PROMPT}\n{untrusted}") + 32
 
 
 def _batch_comments(request: AnalysisRequest, batch: CommentBatch) -> tuple[Comment, ...]:
