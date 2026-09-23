@@ -10,7 +10,7 @@ from requirementseeker_agent.pipeline.signals import (
     extract_signals,
     stable_signal_id,
 )
-from requirementseeker_agent.runtime import BudgetLedger
+from requirementseeker_agent.runtime import BudgetLedger, BudgetLimitExceeded
 
 from .test_invocation import ScriptedGateway, analysis_request, response
 
@@ -70,6 +70,27 @@ def test_unknown_comment_reference_is_repaired_once() -> None:
     assert gateway.calls[1].content_blocks[-1].kind == "repair"
 
 
+def test_repair_does_not_exceed_gateway_input_capacity() -> None:
+    request = analysis_request()
+    gateway = ScriptedGateway(
+        [response(signal_payload("missing")), response(signal_payload("comment-1"))],
+        max_input_tokens_per_call=100,
+    )
+
+    with pytest.raises(BudgetLimitExceeded) as raised:
+        extract_signals(
+            request,
+            batch("comment-1"),
+            gateway,
+            ledger(request),
+            max_output_tokens=200,
+        )
+
+    assert raised.value.resource == "input_tokens"
+    assert len(raised.value.audits) == 1
+    assert len(gateway.calls) == 1
+
+
 def test_second_invalid_output_produces_no_signals() -> None:
     request = analysis_request()
     gateway = ScriptedGateway(
@@ -103,9 +124,7 @@ def test_model_signal_id_is_ignored_and_agent_id_is_stable() -> None:
     signal = result.signals[0]
     assert signal.summary == "批量 导出"
     assert signal.signal_id != "model-controlled-id"
-    assert signal.signal_id == stable_signal_id(
-        "comment-1", "need", "批量 导出", "signal-v1"
-    )
+    assert signal.signal_id == stable_signal_id("comment-1", "need", "批量 导出", "signal-v1")
 
 
 @pytest.mark.parametrize(

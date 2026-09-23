@@ -36,6 +36,26 @@ def test_missing_usage_consumes_full_reservation() -> None:
     assert snapshot.output_tokens_consumed == 10
 
 
+def test_reported_usage_above_reservation_exhausts_budget_after_recording_actual() -> None:
+    ledger = BudgetLedger.from_analysis_budget(
+        AnalysisBudget(max_model_calls=1, max_input_tokens=10, max_output_tokens=10)
+    )
+    reservation = ledger.reserve(input_tokens=5, output_tokens=5)
+
+    with pytest.raises(BudgetLimitExceeded) as raised:
+        ledger.settle(
+            reservation,
+            TokenUsage(input_tokens=20, output_tokens=20, total_tokens=40),
+        )
+
+    assert raised.value.resource == "input_tokens"
+    snapshot = ledger.snapshot()
+    assert snapshot.model_calls_consumed == 1
+    assert snapshot.input_tokens_consumed == 20
+    assert snapshot.output_tokens_consumed == 20
+    assert snapshot.model_calls_reserved == 0
+
+
 @pytest.mark.parametrize(
     ("budget", "operation", "resource"),
     [

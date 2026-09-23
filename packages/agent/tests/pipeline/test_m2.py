@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from pydantic import ValidationError
 
-from requirementseeker_agent.contracts.analysis import NeedCluster
+from requirementseeker_agent.contracts.analysis import NeedCluster, TokenUsage
 from requirementseeker_agent.contracts.requests import AnalysisRequest
 from requirementseeker_agent.contracts.sampling import SamplingManifest
 from requirementseeker_agent.model import (
@@ -49,6 +49,13 @@ class ReverseSignalGateway(CountingGateway):
         if isinstance(signals, list):
             payload["signals"] = list(reversed(signals))
         return result.model_copy(update={"payload": payload})
+
+
+class OverreportingGateway(CountingGateway):
+    def invoke(self, request: ModelCallRequest) -> ModelCallResponse:
+        result = super().invoke(request)
+        usage = TokenUsage(input_tokens=20_000, output_tokens=5_000, total_tokens=25_000)
+        return result.model_copy(update={"usage": usage})
 
 
 def request_with_c_ids() -> AnalysisRequest:
@@ -422,3 +429,59 @@ def test_video_prompt_overhead_is_checked_before_gateway_call() -> None:
     assert result.status == "budget_exhausted"
     assert result.exhausted_resource == "input_tokens"
     assert gateway.calls == []
+
+
+def test_retry_budget_exhaustion_keeps_prior_attempt_audits() -> None:
+    request = request_with_c_ids()
+    request = request.model_copy(
+        update={"budget": request.budget.model_copy(update={"max_model_calls": 2})}
+    )
+    request, manifest, plan = inputs(request)
+    gateway = CountingGateway("timeout")
+
+    result = analyze_m2(request, manifest, plan, gateway, InMemorySemanticCache())
+
+    assert result.status == "budget_exhausted"
+    assert result.exhausted_resource == "model_calls"
+    assert [audit.status for audit in result.audits] == ["error", "error"]
+    assert result.budget.model_calls_consumed == 2
+
+
+def test_overreported_usage_cannot_complete_pipeline() -> None:
+    request, manifest, plan = inputs()
+    gateway = OverreportingGateway("valid_pipeline")
+
+    result = analyze_m2(request, manifest, plan, gateway, InMemorySemanticCache())
+
+    assert result.status == "budget_exhausted"
+    assert result.exhausted_resource == "input_tokens"
+    assert [audit.status for audit in result.audits] == ["success"]
+    assert result.clusters == []
+    assert result.budget.input_tokens_consumed == 20_000
+
+
+def test_public_pipeline_observes_cancellation_after_model_call() -> None:
+    request, manifest, plan = inputs()
+    cancelled = False
+
+    class CancellingGateway(CountingGateway):
+        def invoke(self, call: ModelCallRequest) -> ModelCallResponse:
+            nonlocal cancelled
+            response = super().invoke(call)
+            cancelled = True
+            return response
+
+    gateway = CancellingGateway("valid_pipeline")
+    result = analyze_m2(
+        request,
+        manifest,
+        plan,
+        gateway,
+        InMemorySemanticCache(),
+        cancellation_probe=lambda: cancelled,
+    )
+
+    assert result.status == "cancelled"
+    assert [audit.status for audit in result.audits] == ["cancelled"]
+    assert result.clusters == []
+    assert len(gateway.calls) == 1

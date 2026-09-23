@@ -17,6 +17,7 @@ from ..runtime.budget import BudgetLedger
 from .batching import CommentBatch, estimate_text_tokens
 from .invocation import (
     CancellationProbe,
+    InvocationBudgetExceeded,
     InvocationCancelled,
     InvocationFailure,
     invoke_model,
@@ -194,12 +195,14 @@ def _validate_payload(payload: object, allowed_ids: frozenset[str]) -> tuple[Nee
 
 
 def _prepend_audits(
-    error: InvocationFailure | InvocationCancelled,
+    error: InvocationFailure | InvocationCancelled | InvocationBudgetExceeded,
     prior: tuple[ModelInvocationAudit, ...],
-) -> InvocationFailure | InvocationCancelled:
+) -> InvocationFailure | InvocationCancelled | InvocationBudgetExceeded:
     combined = prior + error.audits
     if isinstance(error, InvocationCancelled):
         return InvocationCancelled(combined)
+    if isinstance(error, InvocationBudgetExceeded):
+        return InvocationBudgetExceeded(error.resource, combined)
     return InvocationFailure(error.code, retryable=error.retryable, audits=combined)
 
 
@@ -228,6 +231,7 @@ def extract_signals(
     allowed_ids = frozenset(batch.comment_ids)
     audits: tuple[ModelInvocationAudit, ...] = ()
     next_attempt = 1
+    input_tokens = batch.estimated_input_tokens
     repairs = min(request.retry_policy.max_output_repairs, 1)
 
     for repair_index in range(repairs + 1):
@@ -242,6 +246,10 @@ def extract_signals(
                 ),
             )
             call = call.model_copy(update={"content_blocks": [*call.content_blocks, repair]})
+            input_tokens += estimate_text_tokens(repair.content)
+
+        if input_tokens > gateway.capabilities.max_input_tokens_per_call:
+            raise InvocationBudgetExceeded("input_tokens", audits)
 
         try:
             invocation = invoke_model(
@@ -249,11 +257,11 @@ def extract_signals(
                 call,
                 gateway,
                 ledger,
-                input_tokens=batch.estimated_input_tokens,
+                input_tokens=input_tokens,
                 start_attempt=next_attempt,
                 cancellation_probe=cancellation_probe,
             )
-        except (InvocationFailure, InvocationCancelled) as error:
+        except (InvocationFailure, InvocationCancelled, InvocationBudgetExceeded) as error:
             raise _prepend_audits(error, audits) from error
 
         audits += invocation.audits

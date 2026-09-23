@@ -92,8 +92,17 @@ class BudgetLedger:
             raise ValueError("reservation_not_active")
         del self._active[reservation.reservation_id]
         self._calls += 1
-        self._input += reservation.input_tokens if usage is None else usage.input_tokens
-        self._output += reservation.output_tokens if usage is None else usage.output_tokens
+        actual_input = reservation.input_tokens if usage is None else usage.input_tokens
+        actual_output = reservation.output_tokens if usage is None else usage.output_tokens
+        self._input += actual_input
+        self._output += actual_output
+        if actual_input > reservation.input_tokens or self._input > self._limits.max_input_tokens:
+            raise BudgetLimitExceeded("input_tokens")
+        if (
+            actual_output > reservation.output_tokens
+            or self._output > self._limits.max_output_tokens
+        ):
+            raise BudgetLimitExceeded("output_tokens")
 
     def snapshot(self) -> BudgetSnapshot:
         """返回不可变快照，供审计和停止条件判断。"""

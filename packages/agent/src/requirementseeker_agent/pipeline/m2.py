@@ -29,7 +29,12 @@ from ..runtime import (
 from ..sampling import SAMPLING_POLICY_VERSION, SamplingPlan, assess_quality
 from .batching import BatchPlanner, BatchPlanningError, CommentBatch
 from .clusters import CLUSTER_PROMPT_VERSION, cluster_signals, stable_cluster_id
-from .invocation import InvocationCancelled, InvocationFailure
+from .invocation import (
+    CancellationProbe,
+    InvocationBudgetExceeded,
+    InvocationCancelled,
+    InvocationFailure,
+)
 from .signals import (
     SIGNAL_PROMPT_VERSION,
     InvalidModelOutput,
@@ -345,6 +350,8 @@ def analyze_m2(
     plan: SamplingPlan,
     gateway: ModelGateway,
     cache: InMemorySemanticCache,
+    *,
+    cancellation_probe: CancellationProbe = lambda: False,
 ) -> M2AnalysisResult:
     """执行一次离线 M2 分析，并把所有停止条件映射为稳定状态。"""
 
@@ -366,7 +373,7 @@ def analyze_m2(
             )
         ledger.consume_comments(len(request.comments))
         completed.append("preprocess")
-        if request.cancellation_requested:
+        if request.cancellation_requested or cancellation_probe():
             return _result(
                 request,
                 plan,
@@ -384,6 +391,8 @@ def analyze_m2(
         ).plan(request.comments)
         per_call_output = _output_limit(request)
         for batch in batch_plan.batches:
+            if request.cancellation_requested or cancellation_probe():
+                raise InvocationCancelled(())
             key = _signal_cache_key(request, plan, batch)
             cached, event = cache.get(
                 key,
@@ -400,12 +409,15 @@ def analyze_m2(
                     gateway,
                     ledger,
                     max_output_tokens=per_call_output,
+                    cancellation_probe=cancellation_probe,
                 )
                 signals.extend(extraction.signals)
                 audits.extend(extraction.audits)
                 _store_signals(cache, key, request, batch, extraction.signals)
         signals.sort(key=lambda signal: (signal.comment_id, signal.signal_id))
         completed.append("signals")
+        if request.cancellation_requested or cancellation_probe():
+            raise InvocationCancelled(())
         if not signals:
             return _result(
                 request,
@@ -433,6 +445,7 @@ def analyze_m2(
                 gateway,
                 ledger,
                 max_output_tokens=per_call_output,
+                cancellation_probe=cancellation_probe,
             )
             audits.extend(cluster_result.audits)
             clusters = cluster_result.clusters
@@ -459,6 +472,18 @@ def analyze_m2(
             status="budget_exhausted",
             signals=signals,
             audits=audits,
+            cache_events=cache_events,
+            completed_steps=completed,
+            exhausted_resource=error.resource,
+        )
+    except InvocationBudgetExceeded as error:
+        return _result(
+            request,
+            plan,
+            ledger,
+            status="budget_exhausted",
+            signals=signals,
+            audits=[*audits, *error.audits],
             cache_events=cache_events,
             completed_steps=completed,
             exhausted_resource=error.resource,

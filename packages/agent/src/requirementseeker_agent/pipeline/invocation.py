@@ -15,7 +15,7 @@ from ..model.types import (
     ModelGateway,
     ModelGatewayError,
 )
-from ..runtime.budget import BudgetLedger
+from ..runtime.budget import BudgetLedger, BudgetLimitExceeded, BudgetResource
 
 CancellationProbe = Callable[[], bool]
 _TRANSPORT_ERRORS: frozenset[GatewayErrorCode] = frozenset(
@@ -53,6 +53,14 @@ class InvocationCancelled(RuntimeError):
 
     def __init__(self, audits: tuple[ModelInvocationAudit, ...]) -> None:
         super().__init__("cancelled")
+        self.audits = audits
+
+
+class InvocationBudgetExceeded(BudgetLimitExceeded):
+    """预算耗尽时保留此前已执行调用的审计。"""
+
+    def __init__(self, resource: BudgetResource, audits: tuple[ModelInvocationAudit, ...]) -> None:
+        super().__init__(resource)
         self.audits = audits
 
 
@@ -134,10 +142,13 @@ def invoke_model(
             raise InvocationCancelled(tuple(audits))
 
         attempted_call = _attempt_call(call, attempt)
-        reservation = ledger.reserve(
-            input_tokens=input_tokens,
-            output_tokens=attempted_call.max_output_tokens,
-        )
+        try:
+            reservation = ledger.reserve(
+                input_tokens=input_tokens,
+                output_tokens=attempted_call.max_output_tokens,
+            )
+        except BudgetLimitExceeded as error:
+            raise InvocationBudgetExceeded(error.resource, tuple(audits)) from error
         try:
             response = gateway.invoke(attempted_call)
         except ModelGatewayError as error:
@@ -147,9 +158,7 @@ def invoke_model(
                 audits.append(_audit(request, attempted_call, status="cancelled"))
                 raise InvocationCancelled(tuple(audits)) from error
 
-            audits.append(
-                _audit(request, attempted_call, status="error", error_code=error.code)
-            )
+            audits.append(_audit(request, attempted_call, status="error", error_code=error.code))
             may_retry = error.retryable and error.code in _TRANSPORT_ERRORS
             if may_retry and transport_retries < request.retry_policy.max_transport_retries:
                 transport_retries += 1
@@ -161,7 +170,11 @@ def invoke_model(
                 audits=tuple(audits),
             ) from error
 
-        ledger.settle(reservation, response.usage)
+        try:
+            ledger.settle(reservation, response.usage)
+        except BudgetLimitExceeded as error:
+            audits.append(_audit(request, attempted_call, status="success", response=response))
+            raise InvocationBudgetExceeded(error.resource, tuple(audits)) from error
         if request.cancellation_requested or cancellation_probe():
             audits.append(_audit(request, attempted_call, status="cancelled", response=response))
             raise InvocationCancelled(tuple(audits))

@@ -29,6 +29,7 @@ from .batching import (
 )
 from .invocation import (
     CancellationProbe,
+    InvocationBudgetExceeded,
     InvocationCancelled,
     InvocationFailure,
     invoke_model,
@@ -265,12 +266,14 @@ def _validate_payload(
 
 
 def _prepend_audits(
-    error: InvocationFailure | InvocationCancelled,
+    error: InvocationFailure | InvocationCancelled | InvocationBudgetExceeded,
     prior: tuple[ModelInvocationAudit, ...],
-) -> InvocationFailure | InvocationCancelled:
+) -> InvocationFailure | InvocationCancelled | InvocationBudgetExceeded:
     combined = prior + error.audits
     if isinstance(error, InvocationCancelled):
         return InvocationCancelled(combined)
+    if isinstance(error, InvocationBudgetExceeded):
+        return InvocationBudgetExceeded(error.resource, combined)
     return InvocationFailure(error.code, retryable=error.retryable, audits=combined)
 
 
@@ -328,7 +331,7 @@ def _invoke_batch(
                 start_attempt=next_attempt,
                 cancellation_probe=cancellation_probe,
             )
-        except (InvocationFailure, InvocationCancelled) as error:
+        except (InvocationFailure, InvocationCancelled, InvocationBudgetExceeded) as error:
             raise _prepend_audits(error, prior_audits + audits) from error
 
         audits += invocation.audits

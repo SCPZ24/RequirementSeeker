@@ -44,6 +44,6 @@ print(decision.model_dump_json(indent=2))
 uv run --project packages/agent python packages/agent/examples/m2_fake_demo.py
 ```
 
-演示使用仓库中的合成请求和 `ScenarioModelGateway`，不连接平台或模型服务。JSON 输出包含 `completed` 状态、稳定信号与簇 ID、一项通过的三人共识决策，以及评论、调用和 Token 用量。宿主正式调用时需提供同一视频的 `AnalysisRequest`、`SamplingManifest`、`SamplingPlan`、模型网关与语义缓存，再调用 `analyze_m2`。
+演示使用仓库中的合成请求和 `ScenarioModelGateway`，不连接平台或模型服务。JSON 输出包含 `completed` 状态、稳定信号与簇 ID、一项通过的三人共识决策，以及评论、调用和 Token 用量。宿主正式调用时需提供同一视频的 `AnalysisRequest`、`SamplingManifest`、`SamplingPlan`、模型网关与语义缓存，再调用 `analyze_m2`；可通过可选的 `cancellation_probe` 在运行中请求取消。
 
 完整说明见仓库 [开发说明](../../docs/development/agent-setup.md)，线协议和稳定原因码见 [Agent v1 契约](../../docs/contracts/agent-v1.md)，M2 当前验收边界见 [离线验收记录](../../docs/development/2026-09-07-m2-acceptance.md)。`evals/gold.json` 只是业务评测种子；真实模型语义评测尚未完成。

@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from requirementseeker_agent.contracts.analysis import NeedSignal
+from requirementseeker_agent.contracts.analysis import NeedSignal, TokenUsage
 from requirementseeker_agent.contracts.requests import AnalysisRequest
 from requirementseeker_agent.model import ModelCapabilities
 from requirementseeker_agent.pipeline.clusters import (
@@ -11,7 +11,7 @@ from requirementseeker_agent.pipeline.clusters import (
     stable_cluster_id,
 )
 from requirementseeker_agent.pipeline.signals import InvalidModelOutput
-from requirementseeker_agent.runtime import BudgetLedger
+from requirementseeker_agent.runtime import BudgetLedger, BudgetLimitExceeded
 
 from .test_invocation import ScriptedGateway, analysis_request, response
 
@@ -216,6 +216,31 @@ def test_invalid_cluster_output_is_repaired_once() -> None:
 
     assert len(result.audits) == 2
     assert gateway.calls[1].content_blocks[-1].kind == "repair"
+
+
+def test_cluster_repair_budget_failure_preserves_first_audit() -> None:
+    request = analysis_request()
+    gateway = ScriptedGateway(
+        [
+            response(cluster_payload("missing")),
+            response(
+                cluster_payload(*(comment.comment_id for comment in request.comments)),
+                usage=TokenUsage(input_tokens=20_000, output_tokens=5_000, total_tokens=25_000),
+            ),
+        ]
+    )
+
+    with pytest.raises(BudgetLimitExceeded) as raised:
+        cluster_signals(
+            request,
+            signals_for(request),
+            gateway,
+            ledger(request),
+            max_output_tokens=200,
+        )
+
+    assert [audit.status for audit in raised.value.audits] == ["success", "success"]
+    assert len(gateway.calls) == 2
 
 
 def test_repair_reservation_includes_the_added_instruction() -> None:

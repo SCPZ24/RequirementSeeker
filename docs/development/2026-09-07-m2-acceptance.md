@@ -53,7 +53,7 @@ uv run --project packages/agent pytest packages/agent/tests/evaluation packages/
 | 检查 | 本地结果 |
 |---|---|
 | `uv sync --project packages/agent --locked` | 22 个包解析与检查成功 |
-| 完整 Agent 测试 | 223 passed |
+| 完整 Agent 测试 | 231 passed |
 | Ruff 源码、测试与示例检查 | 通过 |
 | Task 10 触及的 Python 文件格式检查 | 4 个文件通过 |
 | mypy strict | 29 个源码文件无问题 |
@@ -61,3 +61,5 @@ uv run --project packages/agent pytest packages/agent/tests/evaluation packages/
 | `uv run --offline --locked --project packages/agent python packages/agent/examples/m2_fake_demo.py` | 输出 `completed`，无需联网 |
 
 wheel 已核对包含模型替身、M2 编排与结果类型，以及 `signal-v1.txt`、`cluster-v1.txt` 两份提示词资源。以上检查在 Windows、PowerShell 7 中执行；macOS 和真实模型仍未验证。
+
+合并前独立复核补强了预算与取消门禁：超额 usage 会按实记账并停止成功状态；结构修复会重新估算输入并检查单次能力；预算耗尽会保留已发生调用的审计；公共入口可以观察运行中取消。新增回归测试均经历失败再修复，完整 Agent 回归为 231 项通过。上述结果仍仅覆盖离线场景网关。
