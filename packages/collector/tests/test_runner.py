@@ -169,6 +169,21 @@ def test_pilot_writes_three_valid_files(tmp_path: Path) -> None:
     assert collection.collected_total == 2
 
 
+def test_pilot_with_unknown_total_never_claims_complete(tmp_path: Path) -> None:
+    comments = [comment(f"c{index}") for index in range(200)]
+    result = run_pilot(
+        request(),
+        replace(
+            browser_result(comments=comments),
+            video=video().model_copy(update={"total_comment_count": None}),
+        ),
+        output_root=tmp_path,
+    )
+
+    assert result.target == 200
+    assert result.status == "partial"
+
+
 def test_pilot_writes_safe_compact_run_report(tmp_path: Path) -> None:
     result = run_pilot(request(), browser_result(), output_root=tmp_path)
 
@@ -1931,9 +1946,13 @@ class PagingFakeSession:
         self.consume = cast(Callable[[str, object], None], consume)
         self.consume("https://api.bilibili.com/x/web-interface/view", self.video_payload)
 
-    def emit(self, payload: object) -> None:
+    def emit(
+        self,
+        payload: object,
+        url: str = "https://api.bilibili.com/x/v2/reply/wbi/main",
+    ) -> None:
         assert self.consume is not None
-        self.consume("https://api.bilibili.com/x/v2/reply/wbi/main", payload)
+        self.consume(url, payload)
 
     def raise_if_response_failed(self) -> None:
         if self.response_failure is not None:
@@ -1949,6 +1968,47 @@ def _paging_video_payload(total: int) -> dict[str, object]:
     )
     cast(dict[str, object], cast(dict[str, object], payload["data"])["stat"])["reply"] = total
     return cast(dict[str, object], payload)
+
+
+def test_live_bilibili_reply_page_preserves_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = PagingFakeSession(_paging_video_payload(1))
+
+    def perform(page: object, stratum: str) -> str:
+        del page
+        if stratum == "replies":
+            session.emit(
+                {
+                    "code": 0,
+                    "data": {
+                        "root": {"rpid": 11},
+                        "page": {"count": 1, "num": 1, "size": 20},
+                        "replies": [
+                            {
+                                "rpid": 13,
+                                "root": 11,
+                                "parent": 11,
+                                "member": {},
+                                "content": {"message": "Reply page item"},
+                            }
+                        ],
+                    },
+                },
+                "https://api.bilibili.com/x/v2/reply/reply?root=11",
+            )
+        return "performed"
+
+    monkeypatch.setattr(runner, "BrowserSession", lambda: session)
+    monkeypatch.setattr(runner, "perform_stratum_action", perform)
+
+    result = BrowserVideoCollector(supervisor=SequenceSupervisor("ready"))._browse(
+        request(), tmp_path
+    )
+
+    assert result.status == "success"
+    assert len(result.comments) == 1
+    assert result.comments[0].raw_parent_comment_id == "11"
 
 
 def test_live_pagination_counts_unique_ids_despite_advancing_cursors_and_stalls(

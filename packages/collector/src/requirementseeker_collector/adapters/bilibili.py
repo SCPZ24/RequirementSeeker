@@ -126,10 +126,23 @@ class BilibiliAdapter:
                 raise ResponseShapeChanged("response_shape_changed")
             data = mapping(payload.get("data"))
             replies = sequence(data.get("replies"))
+            if parent_comment_id is not None and data.get("root") is not None:
+                root = mapping(data["root"])
+                if required_identifier(root.get("rpid")) != parent_comment_id:
+                    raise ResponseShapeChanged("response_shape_changed")
             comments: list[RawComment] = []
             for value in replies:
                 reply = mapping(value)
-                item = _comment(reply, stratum, rank, video_author_id, parent_comment_id)
+                parent = parent_comment_id
+                if parent_comment_id is not None:
+                    if (
+                        reply.get("root") is not None
+                        and required_identifier(reply["root"]) != parent_comment_id
+                    ):
+                        raise ResponseShapeChanged("response_shape_changed")
+                    if reply.get("parent") is not None:
+                        parent = required_identifier(reply["parent"])
+                item = _comment(reply, stratum, rank, video_author_id, parent)
                 comments.append(item)
                 if parent_comment_id is None:
                     nested = reply.get("replies")
@@ -145,14 +158,29 @@ class BilibiliAdapter:
                                 item.raw_comment_id,
                             )
                         )
-            cursor = mapping(required(data, "cursor"))
-            is_end = cursor.get("is_end")
-            if type(is_end) is not bool:
-                raise ResponseShapeChanged("response_shape_changed")
-            has_more = not is_end
-            next_cursor = optional_identifier(cursor.get("next"))
-            if has_more and next_cursor is None:
-                raise ResponseShapeChanged("response_shape_changed")
+            if parent_comment_id is not None and "page" in data:
+                page = mapping(data["page"])
+                count, number, size = page.get("count"), page.get("num"), page.get("size")
+                if (
+                    type(count) is not int
+                    or type(number) is not int
+                    or type(size) is not int
+                    or count < 0
+                    or number < 1
+                    or size < 1
+                ):
+                    raise ResponseShapeChanged("response_shape_changed")
+                has_more = number * size < count
+                next_cursor = str(number + 1) if has_more else None
+            else:
+                cursor = mapping(required(data, "cursor"))
+                is_end = cursor.get("is_end")
+                if type(is_end) is not bool:
+                    raise ResponseShapeChanged("response_shape_changed")
+                has_more = not is_end
+                next_cursor = optional_identifier(cursor.get("next"))
+                if has_more and next_cursor is None:
+                    raise ResponseShapeChanged("response_shape_changed")
         except (ResponseShapeChanged, ValidationError, TypeError, ValueError):
             raise ResponseShapeChanged("response_shape_changed") from None
         return ParsedCommentPage(comments, has_more, next_cursor)

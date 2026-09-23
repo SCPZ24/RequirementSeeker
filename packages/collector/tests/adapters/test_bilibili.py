@@ -158,6 +158,57 @@ def test_bilibili_reply_response_uses_requested_parent() -> None:
     assert page.comments[0].like_count is None
 
 
+def test_bilibili_reply_page_uses_direct_parent_and_page_metadata() -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "root": {"rpid": 11},
+            "page": {"count": 21, "num": 1, "size": 20},
+            "replies": [
+                {
+                    "rpid": 13,
+                    "root": 11,
+                    "parent": 12,
+                    "member": {},
+                    "content": {"message": "Reply to reply"},
+                }
+            ],
+        },
+    }
+
+    page = BilibiliAdapter().parse_comment_response(
+        payload, "replies", 2, video_author_id="42", parent_comment_id="11"
+    )
+
+    assert page.comments[0].raw_parent_comment_id == "12"
+    assert page.has_more is True
+    assert page.next_cursor == "2"
+
+
+def test_bilibili_reply_page_rejects_mismatched_root() -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "root": {"rpid": 99},
+            "cursor": {"is_end": True},
+            "replies": [
+                {
+                    "rpid": 13,
+                    "root": 99,
+                    "parent": 99,
+                    "member": {},
+                    "content": {"message": "Wrong root"},
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(
+            payload, "replies", 2, video_author_id="42", parent_comment_id="11"
+        )
+
+
 @pytest.mark.parametrize(
     "cursor",
     [None, [], {}, {"is_end": 0}, {"is_end": "false"}],

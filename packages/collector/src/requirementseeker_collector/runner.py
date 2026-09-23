@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic, sleep
 from typing import Literal, Protocol, Self, cast
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import uuid4
 
 from playwright.sync_api import (
@@ -725,7 +725,9 @@ def run_pilot(
         cleanup_succeeded = _finish_pending_transaction(output_root, paths.backup, marker)
 
     status = "artifact_cleanup_failed" if not cleanup_succeeded else browser_result.status
-    if status != "artifact_cleanup_failed" and len(selected) < decision.target:
+    if status != "artifact_cleanup_failed" and (
+        len(selected) < decision.target or not decision.complete_claim_allowed
+    ):
         status = "partial"
     result = PilotResult(request.platform, video_key, status, decision.target, len(merged.comments))
     return finish(result, errors)
@@ -868,6 +870,13 @@ def _local_adapter_url(adapter: PlatformAdapter, response_url: str) -> str:
     path = urlsplit(response_url).path
     host = "api.bilibili.com" if isinstance(adapter, BilibiliAdapter) else "www.douyin.com"
     return f"https://{host}{path}"
+
+
+def _bilibili_reply_root(response_url: str) -> str:
+    roots = parse_qs(urlsplit(response_url).query, keep_blank_values=True).get("root", [])
+    if len(roots) != 1 or not roots[0].isdecimal():
+        raise ResponseShapeChanged("response_shape_changed")
+    return roots[0]
 
 
 def _local_request_allowed(local_url: str, request_url: str) -> bool:
@@ -1101,7 +1110,7 @@ def collect_from_page(
     collection_errors: list[CollectionError] = []
     response_shape_changed = False
     network_boundary_failed = False
-    pending_responses: list[tuple[Mapping[str, object], Stratum]] = []
+    pending_responses: list[tuple[Mapping[str, object], Stratum, str | None]] = []
     in_flight_requests: dict[int, Request] = {}
     observed_comment_requests: dict[int, Request] = {}
 
@@ -1162,16 +1171,19 @@ def collect_from_page(
             raise BrowserSessionError("local_page_request_timeout")
         raise_if_response_failed()
 
-    def parse_comment_payload(payload: Mapping[str, object], stratum: Stratum) -> None:
+    def parse_comment_payload(
+        payload: Mapping[str, object], stratum: Stratum, parent_comment_id: str | None
+    ) -> None:
         nonlocal pages_succeeded
         if video is None:
-            pending_responses.append((payload, stratum))
+            pending_responses.append((payload, stratum, parent_comment_id))
             return
         parsed = adapter.parse_comment_response(
             payload,
             stratum,
             pages_succeeded + 1,
             video_author_id=video.raw_author_id,
+            parent_comment_id=parent_comment_id,
         )
         comments.extend(parsed.comments)
         pages_succeeded += 1
@@ -1191,7 +1203,12 @@ def collect_from_page(
             payload = response.json()
             if not isinstance(payload, Mapping):
                 raise ResponseShapeChanged("response_shape_changed")
-            parse_comment_payload(payload, active_stratum)
+            parent_comment_id = (
+                _bilibili_reply_root(response.url)
+                if isinstance(adapter, BilibiliAdapter) and kind == "replies"
+                else None
+            )
+            parse_comment_payload(payload, active_stratum, parent_comment_id)
         except Exception:
             response_shape_changed = True
 
@@ -1215,8 +1232,8 @@ def collect_from_page(
                     raise ResponseShapeChanged("response_shape_changed")
                 page.wait_for_load_state("networkidle")
                 while pending_responses:
-                    payload, stratum = pending_responses.pop(0)
-                    parse_comment_payload(payload, stratum)
+                    payload, stratum, parent_comment_id = pending_responses.pop(0)
+                    parse_comment_payload(payload, stratum, parent_comment_id)
                 raise_if_response_failed()
                 unavailable_at = datetime.now(UTC)
                 for stratum in cast(tuple[Stratum, ...], ("top", "recent", "replies")):
@@ -1350,10 +1367,12 @@ class BrowserVideoCollector:
         ranks: dict[Stratum, int] = {stratum: 1 for stratum in _STRATA}
         latest_pages: dict[Stratum, tuple[bool, str | None]] = {}
         unique_comment_ids: set[str] = set()
-        pending: list[tuple[Mapping[str, object], Stratum]] = []
+        pending: list[tuple[Mapping[str, object], Stratum, str | None]] = []
         comment_context: BilibiliCommentContext | None = None
 
-        def parse_comments(payload: Mapping[str, object], stratum: Stratum) -> None:
+        def parse_comments(
+            payload: Mapping[str, object], stratum: Stratum, parent_comment_id: str | None
+        ) -> None:
             nonlocal pages_succeeded
             assert video is not None
             parsed = adapter.parse_comment_response(
@@ -1361,6 +1380,7 @@ class BrowserVideoCollector:
                 stratum,
                 ranks[stratum],
                 video_author_id=video.raw_author_id,
+                parent_comment_id=parent_comment_id,
             )
             comments.extend(parsed.comments)
             unique_comment_ids.update(comment.raw_comment_id for comment in parsed.comments)
@@ -1389,8 +1409,8 @@ class BrowserVideoCollector:
                     raise ResponseShapeChanged("response_shape_changed")
                 video = parsed_video
                 while pending:
-                    pending_payload, pending_stratum = pending.pop(0)
-                    parse_comments(pending_payload, pending_stratum)
+                    pending_payload, pending_stratum, pending_parent = pending.pop(0)
+                    parse_comments(pending_payload, pending_stratum, pending_parent)
                 return
             pages_requested += 1
             if isinstance(adapter, BilibiliAdapter) and kind == "comments":
@@ -1400,10 +1420,15 @@ class BrowserVideoCollector:
                 ):
                     raise ResponseShapeChanged("response_shape_changed")
                 comment_context = parsed_context
+            parent_comment_id = (
+                _bilibili_reply_root(url)
+                if isinstance(adapter, BilibiliAdapter) and kind == "replies"
+                else None
+            )
             if video is None:
-                pending.append((payload, current_stratum))
+                pending.append((payload, current_stratum, parent_comment_id))
                 return
-            parse_comments(payload, current_stratum)
+            parse_comments(payload, current_stratum, parent_comment_id)
 
         def establish_bilibili_fallback(page: Page) -> None:
             nonlocal video
@@ -1415,8 +1440,8 @@ class BrowserVideoCollector:
                 return
             video = _bilibili_video_from_page(page, request, comment_context)
             while pending:
-                pending_payload, pending_stratum = pending.pop(0)
-                parse_comments(pending_payload, pending_stratum)
+                pending_payload, pending_stratum, pending_parent = pending.pop(0)
+                parse_comments(pending_payload, pending_stratum, pending_parent)
 
         def establish_page_fallback(page: Page, *, allow_douyin_note: bool = False) -> None:
             nonlocal video
@@ -1431,8 +1456,8 @@ class BrowserVideoCollector:
                 return
             video = _douyin_note_video_from_page(page, request, adapter)
             while pending:
-                pending_payload, pending_stratum = pending.pop(0)
-                parse_comments(pending_payload, pending_stratum)
+                pending_payload, pending_stratum, pending_parent = pending.pop(0)
+                parse_comments(pending_payload, pending_stratum, pending_parent)
 
         def explicitly_exhausted() -> bool:
             return bool(performed_strata) and all(
