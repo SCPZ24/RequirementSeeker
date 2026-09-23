@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="rs-video-id" content="BV1synthetic">
+    <meta name="rs-author-id" content="42">
+    <meta name="rs-title" content="Synthetic Video">
+    <meta name="rs-description" content="Synthetic integration page">
+    <meta name="rs-total-comment-count" content="2">
+    <title>Synthetic Video</title>
+  </head>
+  <body style="min-height: 2400px">
+    <main>
+      <h1>Synthetic Video</h1>
+      <button type="button" data-rs-stratum="top">Popular</button>
+      <button id="recent" type="button" data-rs-stratum="recent">Recent</button>
+      <button type="button" data-rs-stratum="replies">Replies</button>
+      <div style="height: 1800px" aria-hidden="true"></div>
+      <p id="end" data-rs-end="false" hidden>End of comments</p>
+    </main>
+    <script>
+      const parameters = new URLSearchParams(window.location.search);
+      const mode = parameters.get("mode") || "supported";
+      const videoId = parameters.get("video_id");
+      if (videoId !== null) {
+        document.querySelector('meta[name="rs-video-id"]').content = videoId;
+      }
+      if (mode === "without-recent") {
+        document.querySelector("#recent").remove();
+      }
+      let requested = false;
+      if (mode === "douyin-invalid" || mode === "douyin-delayed-invalid") {
+        fetch("/aweme/v1/web/aweme/detail").then(() => {
+          const requestInvalid = () => fetch("/aweme/v1/web/comment/list");
+          if (mode === "douyin-delayed-invalid") {
+            window.setTimeout(requestInvalid, 250);
+          } else {
+            requestInvalid();
+          }
+        });
+      }
+      async function requestComments() {
+        if (requested) return;
+        requested = true;
+        if (mode === "early-unknown-end") {
+          const end = document.querySelector("#end");
+          end.hidden = false;
+          end.dataset.rsEnd = "true";
+          await fetch("/x/v2/reply/wbi/main?shape=delayed-unknown");
+          return;
+        }
+        if (mode === "external-request") {
+          const end = document.querySelector("#end");
+          end.hidden = false;
+          end.dataset.rsEnd = "true";
+          await fetch("https://example.invalid/forbidden");
+          return;
+        }
+        if (mode === "websocket") {
+          const socket = new WebSocket(`ws://localhost:${window.location.port}/socket`);
+          socket.addEventListener("error", () => {});
+          const end = document.querySelector("#end");
+          end.hidden = false;
+          end.dataset.rsEnd = "true";
+          return;
+        }
+        if (mode === "stalled") return;
+        if (mode === "end-empty") {
+          const end = document.querySelector("#end");
+          end.hidden = false;
+          end.dataset.rsEnd = "true";
+          return;
+        }
+        const shape = mode === "unknown" ? "unknown" : mode === "http-500" ? "http-500" : "supported";
+        await fetch(`/x/v2/reply/wbi/main?shape=${shape}`);
+        const end = document.querySelector("#end");
+        end.hidden = false;
+        end.dataset.rsEnd = "true";
+      }
+      window.addEventListener("scroll", requestComments);
+      if (mode === "early") requestComments();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,284 @@
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from requirementseeker_collector.adapters.base import ResponseShapeChanged
+from requirementseeker_collector.adapters.bilibili import BilibiliAdapter
+
+FIXTURES = Path(__file__).parents[1] / "fixtures"
+
+
+def load_fixture(name: str) -> dict[str, Any]:
+    value: object = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return value
+
+
+def test_bilibili_parses_video_response() -> None:
+    parsed = BilibiliAdapter().parse_video_response(load_fixture("bilibili/video.json"))
+
+    assert parsed.video.platform == "bilibili"
+    assert parsed.video.raw_video_id == "BV1synthetic"
+    assert parsed.video.raw_author_id == "42"
+    assert parsed.video.title == "Synthetic Bilibili Video"
+    assert parsed.video.total_comment_count == 2
+    assert parsed.video.duration_seconds == 125
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("bvid", []),
+        ("owner_mid", True),
+        ("title", 1.5),
+        ("desc", {}),
+    ],
+)
+def test_bilibili_rejects_non_scalar_required_video_fields(field: str, value: object) -> None:
+    payload = load_fixture("bilibili/video.json")
+    data = payload["data"]
+    assert isinstance(data, dict)
+    if field == "owner_mid":
+        data["owner"] = {"mid": value}
+    else:
+        data[field] = value
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_video_response(payload)
+
+
+def test_bilibili_oversized_video_timestamp_is_unavailable() -> None:
+    payload = load_fixture("bilibili/video.json")
+    data = payload["data"]
+    assert isinstance(data, dict)
+    data["pubdate"] = 10**400
+
+    parsed = BilibiliAdapter().parse_video_response(payload)
+
+    assert parsed.video.published_at is None
+
+
+def test_bilibili_parses_top_level_and_reply() -> None:
+    page = BilibiliAdapter().parse_comment_response(
+        load_fixture("bilibili/comments.json"), "top", 1, video_author_id="42"
+    )
+
+    assert [(item.raw_comment_id, item.raw_parent_comment_id) for item in page.comments] == [
+        ("11", None),
+        ("12", "11"),
+    ]
+    assert page.comments[0].is_video_author is True
+    assert page.comments[1].is_video_author is False
+    assert page.has_more is False
+    assert page.next_cursor == "2"
+
+
+def test_bilibili_parses_strict_comment_video_context() -> None:
+    context = BilibiliAdapter().parse_comment_context(load_fixture("bilibili/comments.json"))
+
+    assert context.video_author_id == "42"
+    assert context.total_comment_count == 2
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"code": 0, "data": {"cursor": {"all_count": 2}}},
+        {"code": 0, "data": {"upper": {"mid": 42}, "cursor": {}}},
+        {"code": 0, "data": {"upper": {"mid": True}, "cursor": {"all_count": 2}}},
+        {"code": 0, "data": {"upper": {"mid": 42}, "cursor": {"all_count": -1}}},
+    ],
+)
+def test_bilibili_rejects_incomplete_comment_video_context(payload: dict[str, Any]) -> None:
+    with pytest.raises(ResponseShapeChanged, match="^response_shape_changed$"):
+        BilibiliAdapter().parse_comment_context(payload)
+
+
+@pytest.mark.parametrize("field", ["rpid", "message"])
+@pytest.mark.parametrize("value", [[], {}, True, 1.5])
+def test_bilibili_rejects_non_scalar_required_comment_fields(field: str, value: object) -> None:
+    payload = load_fixture("bilibili/comments.json")
+    data = payload["data"]
+    assert isinstance(data, dict)
+    replies = data["replies"]
+    assert isinstance(replies, list)
+    reply = replies[0]
+    assert isinstance(reply, dict)
+    if field == "message":
+        reply["content"] = {"message": value}
+    else:
+        reply[field] = value
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
+
+
+def test_bilibili_oversized_comment_timestamp_is_unavailable() -> None:
+    payload = load_fixture("bilibili/comments.json")
+    data = payload["data"]
+    assert isinstance(data, dict)
+    replies = data["replies"]
+    assert isinstance(replies, list)
+    reply = replies[0]
+    assert isinstance(reply, dict)
+    reply["ctime"] = 10**400
+
+    page = BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
+
+    assert page.comments[0].published_at is None
+
+
+def test_bilibili_reply_response_uses_requested_parent() -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "replies": [
+                {
+                    "rpid": 13,
+                    "member": {},
+                    "content": {"message": "Reply page item"},
+                }
+            ],
+            "cursor": {"is_end": True},
+        },
+    }
+
+    page = BilibiliAdapter().parse_comment_response(
+        payload,
+        "replies",
+        2,
+        video_author_id="42",
+        parent_comment_id="11",
+    )
+
+    assert page.comments[0].raw_parent_comment_id == "11"
+    assert page.comments[0].raw_author_id is None
+    assert page.comments[0].like_count is None
+
+
+def test_bilibili_reply_page_uses_direct_parent_and_page_metadata() -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "root": {"rpid": 11},
+            "page": {"count": 21, "num": 1, "size": 20},
+            "replies": [
+                {
+                    "rpid": 13,
+                    "root": 11,
+                    "parent": 12,
+                    "member": {},
+                    "content": {"message": "Reply to reply"},
+                }
+            ],
+        },
+    }
+
+    page = BilibiliAdapter().parse_comment_response(
+        payload, "replies", 2, video_author_id="42", parent_comment_id="11"
+    )
+
+    assert page.comments[0].raw_parent_comment_id == "12"
+    assert page.has_more is True
+    assert page.next_cursor == "2"
+
+
+def test_bilibili_reply_page_rejects_mismatched_root() -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "root": {"rpid": 99},
+            "cursor": {"is_end": True},
+            "replies": [
+                {
+                    "rpid": 13,
+                    "root": 99,
+                    "parent": 99,
+                    "member": {},
+                    "content": {"message": "Wrong root"},
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(
+            payload, "replies", 2, video_author_id="42", parent_comment_id="11"
+        )
+
+
+@pytest.mark.parametrize(
+    "cursor",
+    [None, [], {}, {"is_end": 0}, {"is_end": "false"}],
+)
+def test_bilibili_rejects_missing_or_invalid_pagination(cursor: object) -> None:
+    payload: dict[str, Any] = {"code": 0, "data": {"replies": []}}
+    if cursor is not None:
+        payload["data"]["cursor"] = cursor
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
+
+
+@pytest.mark.parametrize("next_cursor", [None, [], 1.5])
+def test_bilibili_requires_usable_next_cursor_when_more_pages_exist(
+    next_cursor: object,
+) -> None:
+    payload = {
+        "code": 0,
+        "data": {"replies": [], "cursor": {"is_end": False, "next": next_cursor}},
+    }
+
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
+
+
+@pytest.mark.parametrize("author_id", [["not-an-id"], {"id": 42}, 1.5])
+def test_bilibili_non_scalar_author_identifier_is_unavailable(author_id: object) -> None:
+    payload = {
+        "code": 0,
+        "data": {
+            "replies": [
+                {
+                    "rpid": 13,
+                    "member": {"mid": author_id},
+                    "content": {"message": "Artificial comment"},
+                }
+            ],
+            "cursor": {"is_end": True},
+        },
+    }
+
+    page = BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
+
+    assert page.comments[0].raw_author_id is None
+    assert page.comments[0].is_video_author is None
+
+
+@pytest.mark.parametrize(
+    ("url", "kind"),
+    [
+        ("https://api.bilibili.com/x/web-interface/view?bvid=BV1", "video"),
+        ("https://api.bilibili.com/x/v2/reply/wbi/main?oid=1", "comments"),
+        ("https://api.bilibili.com/x/v2/reply/reply?root=11", "replies"),
+        ("https://api.bilibili.com/x/v2/reply/other", None),
+        ("https://evil.example/x/v2/reply/wbi/main", None),
+    ],
+)
+def test_bilibili_recognizes_only_supported_response_urls(url: str, kind: str | None) -> None:
+    assert BilibiliAdapter().response_kind(url) == kind
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"unexpected": []},
+        {"code": 0, "data": {"replies": [{"content": {"message": "missing id"}}]}},
+        {"code": 0, "data": {"replies": [{"rpid": 11, "content": {}}]}},
+    ],
+)
+def test_bilibili_unknown_or_incomplete_success_shape_closes(payload: dict[str, Any]) -> None:
+    with pytest.raises(ResponseShapeChanged):
+        BilibiliAdapter().parse_comment_response(payload, "top", 1, video_author_id="42")
