@@ -5,6 +5,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -16,6 +17,7 @@ from .contracts import (
     SamplingManifest,
     SanitizedComment,
 )
+from .source import _is_path_redirect
 
 _RAW_IDENTIFIER = re.compile(r"(?i)^(?:raw[-_]|BV[0-9A-Za-z]|\d{15,})")
 
@@ -90,25 +92,13 @@ def _write_annotation(path: Path, annotation: AnnotationFile) -> None:
     )
 
 
-def _commit_label_root(staging: Path, output: Path, backup: Path) -> None:
-    moved_old = False
+def _commit_label_root(staging: Path, output: Path) -> None:
+    if output.exists() or _is_path_redirect(output):
+        raise LabelValidationError("label_output_already_exists")
     try:
-        if output.exists():
-            output.replace(backup)
-            moved_old = True
         staging.replace(output)
     except OSError:
-        if moved_old and backup.exists() and not output.exists():
-            try:
-                backup.replace(output)
-            except OSError:
-                raise LabelValidationError("label_output_recovery_failed") from None
         raise LabelValidationError("label_output_commit_failed") from None
-    if moved_old:
-        try:
-            shutil.rmtree(backup)
-        except OSError:
-            raise LabelValidationError("label_backup_cleanup_failed") from None
 
 
 def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
@@ -126,16 +116,21 @@ def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
     ):
         raise LabelValidationError("label_output_must_be_separate")
 
-    staging = output_root.with_name(f".{output_root.name}.staging")
+    staging = output_root.with_name(f".{output_root.name}.staging.{uuid4().hex}")
     backup = output_root.with_name(f".{output_root.name}.backup")
-    if (
-        staging.exists()
-        or staging.is_symlink()
-        or backup.exists()
-        or backup.is_symlink()
-        or output_root.is_symlink()
-    ):
+    if _is_path_redirect(output_root) or _is_path_redirect(backup):
         raise LabelValidationError("label_output_path_invalid")
+    if backup.exists() and not output_root.exists():
+        if not backup.is_dir():
+            raise LabelValidationError("label_output_path_invalid")
+        try:
+            backup.replace(output_root)
+        except OSError:
+            raise LabelValidationError("label_output_recovery_failed") from None
+    if staging.exists() or _is_path_redirect(staging) or backup.exists():
+        raise LabelValidationError("label_output_path_invalid")
+    if output_root.exists():
+        raise LabelValidationError("label_output_already_exists")
 
     manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
     if not manifests:
@@ -169,7 +164,7 @@ def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
             _write_annotation(staging / relative, annotation)
             annotations.append(annotation)
             relative_outputs.append(relative)
-        _commit_label_root(staging, output_root, backup)
+        _commit_label_root(staging, output_root)
     except Exception:
         if staging.exists() and not staging.is_symlink():
             shutil.rmtree(staging, ignore_errors=True)

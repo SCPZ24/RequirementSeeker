@@ -44,6 +44,8 @@ def _invalid_bundle(tmp_path: Path, case: str) -> Path:
     directory = _copy_valid(tmp_path / case)
     if case == "missing-file":
         (directory / "collection.json").unlink()
+    elif case == "extra-directory":
+        (directory / "extra").mkdir()
     elif case == "unknown-field":
         video = _load_json(directory / "video.json")
         video["cookie"] = "must-not-pass"
@@ -83,6 +85,7 @@ def test_loaded_bundle_models_are_immutable() -> None:
     ("case", "code"),
     [
         ("missing-file", "raw_directory_file_set_invalid"),
+        ("extra-directory", "raw_directory_file_set_invalid"),
         ("unknown-field", "raw_video_invalid"),
         ("duplicate-comment", "raw_comment_id_duplicate"),
         ("count-mismatch", "collected_total_mismatch"),
@@ -92,6 +95,23 @@ def test_loaded_bundle_models_are_immutable() -> None:
 def test_invalid_raw_directory_is_rejected(tmp_path: Path, case: str, code: str) -> None:
     with pytest.raises(RawDatasetError, match=code):
         read_raw_video(_invalid_bundle(tmp_path, case))
+
+
+@pytest.mark.parametrize("redirect_method", ["is_symlink", "is_junction"])
+def test_redirected_raw_file_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, redirect_method: str
+) -> None:
+    directory = _copy_valid(tmp_path)
+    comments = directory / "comments.jsonl"
+    original_check = getattr(Path, redirect_method)
+    monkeypatch.setattr(
+        Path,
+        redirect_method,
+        lambda path: path == comments or original_check(path),
+    )
+
+    with pytest.raises(RawDatasetError, match="raw_directory_file_set_invalid"):
+        read_raw_video(directory)
 
 
 def test_platform_directory_must_match_video_contract(tmp_path: Path) -> None:

@@ -47,5 +47,8 @@ def sanitize_text(source: str) -> TextResult:
         if count:
             counts[rule.name] += count
 
-    reviews = ["possible_precise_address"] if PRECISE_ADDRESS_CANDIDATE.search(text) else []
+    text, precise_address_count = PRECISE_ADDRESS_CANDIDATE.subn("[ADDRESS]", text)
+    if precise_address_count:
+        counts["address"] += precise_address_count
+    reviews = ["possible_precise_address"] if precise_address_count else []
     return TextResult(text=text, replacement_counts=dict(counts), review_reasons=reviews)

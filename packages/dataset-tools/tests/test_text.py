@@ -32,10 +32,11 @@ def test_unicode_is_normalized_to_nfc() -> None:
     assert result.text == "Café"
 
 
-def test_ambiguous_address_becomes_review_item_not_deleted() -> None:
+def test_precise_address_is_replaced_and_marked_for_review() -> None:
     result = sanitize_text("在幸福路 18 号见")
 
-    assert result.text == "在幸福路 18 号见"
+    assert result.text == "[ADDRESS]见"
+    assert result.replacement_counts == {"address": 1}
     assert result.review_reasons == ["possible_precise_address"]
 
 

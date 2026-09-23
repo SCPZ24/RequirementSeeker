@@ -133,8 +133,46 @@ def test_missing_approved_input_preserves_existing_output(
         sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET")
 
     assert marker.read_text(encoding="utf-8") == "keep"
-    assert not output.with_name(".sanitized.staging").exists()
+    assert not list(output.parent.glob(".sanitized.staging.*"))
     assert not output.with_name(".sanitized.backup").exists()
+
+
+def test_interrupted_publish_restores_backup_before_input_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    output = tmp_path / "sanitized"
+    backup = output.with_name(".sanitized.backup")
+    backup.mkdir()
+    (backup / "previous.txt").write_text("keep", encoding="utf-8")
+    stale = output.with_name(".sanitized.staging")
+    stale.mkdir()
+    (stale / "incomplete.txt").write_text("keep", encoding="utf-8")
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+
+    with pytest.raises(SanitizationError, match="approved_raw_directory_missing"):
+        sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET")
+
+    assert (output / "previous.txt").read_text(encoding="utf-8") == "keep"
+    assert not backup.exists()
+    assert (stale / "incomplete.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_stale_staging_does_not_block_new_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _prepare_raw(tmp_path)
+    output = tmp_path / "sanitized"
+    stale = output.with_name(".sanitized.staging")
+    stale.mkdir()
+    (stale / "marker.txt").write_text("keep", encoding="utf-8")
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+
+    result = sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET")
+
+    assert result.sampling_manifests
+    assert (stale / "marker.txt").read_text(encoding="utf-8") == "keep"
 
 
 def test_failed_publish_restores_previous_output(
@@ -145,11 +183,10 @@ def test_failed_publish_restores_previous_output(
     output.mkdir()
     marker = output / "previous.txt"
     marker.write_text("keep", encoding="utf-8")
-    staging = output.with_name(".sanitized.staging")
     original_replace = Path.replace
 
     def fail_staging_publish(path: Path, target: Path) -> Path:
-        if path == staging:
+        if path.name.startswith(".sanitized.staging."):
             raise OSError("simulated publish failure")
         return original_replace(path, target)
 
@@ -160,7 +197,7 @@ def test_failed_publish_restores_previous_output(
         sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET")
 
     assert marker.read_text(encoding="utf-8") == "keep"
-    assert not staging.exists()
+    assert not list(output.parent.glob(".sanitized.staging.*"))
     assert not output.with_name(".sanitized.backup").exists()
 
 
@@ -199,8 +236,11 @@ def test_text_redaction_and_duplicate_statistics_are_safe(
     rendered = "".join(path.read_text("utf-8") for path in result.output_files)
 
     assert "test@example.com" not in rendered
+    assert "中山路12号" not in rendered
+    assert rendered.count("[ADDRESS]") >= 2
     assert manifest.normalized_duplicate_count == 1
     assert report.replacement_counts["email"] == 2
+    assert report.replacement_counts["address"] == 2
     assert report.review_item_count == 2
     assert {item.reason for item in report.review_items} == {"possible_precise_address"}
 

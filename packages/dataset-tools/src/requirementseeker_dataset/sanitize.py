@@ -9,6 +9,7 @@ from hashlib import sha256
 from math import ceil, sqrt
 from pathlib import Path
 from typing import Literal, Self
+from uuid import uuid4
 
 from pydantic import Field, HttpUrl, ValidationError, model_validator
 
@@ -25,7 +26,7 @@ from .contracts import (
     VideoMetrics,
 )
 from .identifiers import IdentifierPseudonymizer
-from .source import RawVideoBundle, read_raw_video
+from .source import RawVideoBundle, _is_path_redirect, read_raw_video
 from .split import stable_split
 from .text import TextResult, sanitize_text
 
@@ -207,7 +208,7 @@ def _sanitize_bundle(
         collected_total=len(comments),
         pages_requested=bundle.collection.pages_requested,
         pages_succeeded=bundle.collection.pages_succeeded,
-        sort_modes=bundle.collection.sort_modes,
+        sort_modes=[str(mode) for mode in bundle.collection.sort_modes],
         collection_started_at=bundle.collection.collection_started_at,
         collection_finished_at=bundle.collection.collection_finished_at,
         collection_error_count=len(bundle.collection.collection_errors),
@@ -393,12 +394,30 @@ def sanitize_root(
         or output_resolved in raw_resolved.parents
     ):
         raise SanitizationError("output_must_be_outside_raw_root")
+    if _is_path_redirect(raw_root):
+        raise SanitizationError("raw_root_invalid")
+
+    staging = output_root.with_name(f".{output_root.name}.staging.{uuid4().hex}")
+    backup = output_root.with_name(f".{output_root.name}.backup")
+    if _is_path_redirect(output_root) or _is_path_redirect(backup):
+        raise SanitizationError("output_transaction_already_exists")
+    if backup.exists() and not output_root.exists():
+        if not backup.is_dir():
+            raise SanitizationError("output_transaction_already_exists")
+        try:
+            backup.replace(output_root)
+        except OSError:
+            raise SanitizationError("output_recovery_failed") from None
+    if staging.exists() or _is_path_redirect(staging) or backup.exists():
+        raise SanitizationError("output_transaction_already_exists")
 
     # 在创建 staging 前完成所有原始输入校验，失败时不会触碰现有输出。
     approved: list[tuple[_PlanVideo, RawVideoBundle]] = []
     for item in plan.videos:
+        if _is_path_redirect(raw_root / item.platform):
+            raise SanitizationError("approved_raw_directory_missing")
         directory = raw_root / item.platform / item.video_key
-        if not directory.is_dir() or directory.is_symlink():
+        if not directory.is_dir() or _is_path_redirect(directory):
             raise SanitizationError("approved_raw_directory_missing")
         bundle = read_raw_video(directory)
         if bundle.video.platform != item.platform or bundle.video.raw_video_id != item.video_key:
@@ -406,10 +425,6 @@ def sanitize_root(
         approved.append((item, bundle))
 
     excluded_count = _count_unapproved_directories(raw_root, plan)
-    staging = output_root.with_name(f".{output_root.name}.staging")
-    backup = output_root.with_name(f".{output_root.name}.backup")
-    if staging.exists() or staging.is_symlink() or backup.exists() or backup.is_symlink():
-        raise SanitizationError("output_transaction_already_exists")
     try:
         staging.mkdir(parents=True)
         video_ids: list[str] = []

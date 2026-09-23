@@ -285,9 +285,9 @@ def test_semantic_content_and_internal_spaces_are_preserved() -> None:
     assert result.text == "我需要  一个离线工具\n第二行"
 
 
-def test_ambiguous_address_becomes_review_item_not_deleted() -> None:
+def test_precise_address_is_replaced_and_marked_for_review() -> None:
     result = sanitize_text("在幸福路 18 号见")
-    assert result.text
+    assert result.text == "[ADDRESS]见"
     assert result.review_reasons == ["possible_precise_address"]
 
 
@@ -304,7 +304,7 @@ Expected: text module import fails.
 
 - [x] **Step 3: Write minimal implementation**
 
-Normalize Unicode to NFC, convert CRLF/CR to LF and strip only outer whitespace. Apply ordered compiled patterns for email, mainland phone, mainland identity number, explicitly introduced private handles and addresses introduced by `地址：`. Replace with `[EMAIL]`, `[PHONE]`, `[IDENTIFIER]`, `[HANDLE]`, `[ADDRESS]`; record category replacement counts. Other address-like phrases add `possible_precise_address` review without erasing the text.
+Normalize Unicode to NFC, convert CRLF/CR to LF and strip only outer whitespace. Apply ordered compiled patterns for email, mainland phone, mainland identity number, explicitly introduced private handles and addresses introduced by `地址：`. Replace with `[EMAIL]`, `[PHONE]`, `[IDENTIFIER]`, `[HANDLE]`, `[ADDRESS]`; record category replacement counts. Street-and-number address candidates are also replaced with `[ADDRESS]` and add `possible_precise_address` for human review, so precise locations cannot enter sanitized or labeling files.
 
 ```python
 EMAIL_PATTERN = re.compile(r"(?i)(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?![\w.-])")
@@ -329,7 +329,9 @@ def sanitize_text(source: str) -> TextResult:
     for rule in RULES:
         text, count = rule.pattern.subn(rule.replacement, text)
         counts[rule.name] += count
-    reviews = ["possible_precise_address"] if PRECISE_ADDRESS_CANDIDATE.search(text) else []
+    text, precise_address_count = PRECISE_ADDRESS_CANDIDATE.subn("[ADDRESS]", text)
+    counts["address"] += precise_address_count
+    reviews = ["possible_precise_address"] if precise_address_count else []
     return TextResult(text, dict(counts), reviews)
 ```
 

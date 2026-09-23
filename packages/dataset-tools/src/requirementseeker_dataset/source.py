@@ -1,5 +1,6 @@
 """严格读取 Collector 三文件输出，不依赖 Collector 的 Python 包。"""
 
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal, Self
@@ -19,6 +20,16 @@ from .contracts import (
 
 _REQUIRED_FILES = {"video.json", "comments.jsonl", "collection.json"}
 RawText = Annotated[str, Field(min_length=1, pattern=r"\S")]
+
+
+def _is_path_redirect(path: Path) -> bool:
+    if path.is_symlink() or path.is_junction():
+        return True
+    try:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+    except FileNotFoundError:
+        return False
+    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
 
 
 class RawDatasetError(ValueError):
@@ -149,11 +160,15 @@ def _validate_bundle(bundle: RawVideoBundle, directory: Path) -> None:
 def read_raw_video(directory: Path) -> RawVideoBundle:
     """读取并关闭式校验一个原始视频目录。"""
 
+    if _is_path_redirect(directory) or _is_path_redirect(directory.parent):
+        raise RawDatasetError("raw_directory_file_set_invalid")
     try:
-        file_names = {item.name for item in directory.iterdir() if item.is_file()}
+        entries = list(directory.iterdir())
     except OSError:
         raise RawDatasetError("raw_directory_unreadable") from None
-    if file_names != _REQUIRED_FILES:
+    if {item.name for item in entries} != _REQUIRED_FILES or any(
+        not item.is_file() or _is_path_redirect(item) for item in entries
+    ):
         raise RawDatasetError("raw_directory_file_set_invalid")
 
     video = _read_model(directory / "video.json", RawVideoInput, "raw_video_invalid")

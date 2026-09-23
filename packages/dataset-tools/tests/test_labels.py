@@ -65,6 +65,56 @@ def test_export_contains_text_but_no_semantic_prefill(
     assert "comment-1" not in rendered
 
 
+def test_export_preserves_existing_manual_annotations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = _export(tmp_path, monkeypatch)
+    annotation_path = result.output_files[0]
+    annotation_path.write_text("manual work", encoding="utf-8")
+
+    with pytest.raises(LabelValidationError, match="label_output_already_exists"):
+        export_labels(tmp_path / "sanitized", tmp_path / "labels")
+
+    assert annotation_path.read_text(encoding="utf-8") == "manual work"
+
+
+def test_interrupted_label_publish_restores_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = _export(tmp_path, monkeypatch)
+    output = tmp_path / "labels"
+    backup = output.with_name(".labels.backup")
+    output.replace(backup)
+    stale = output.with_name(".labels.staging")
+    stale.mkdir()
+    (stale / "incomplete.txt").write_text("keep", encoding="utf-8")
+
+    with pytest.raises(LabelValidationError, match="label_output_already_exists"):
+        export_labels(tmp_path / "sanitized", output)
+
+    assert result.output_files[0].is_file()
+    assert not backup.exists()
+    assert (stale / "incomplete.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_stale_label_staging_does_not_block_new_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = tmp_path / "raw"
+    shutil.copytree(FIXTURES / "raw" / "valid", raw)
+    sanitized = tmp_path / "sanitized"
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+    sanitize_root(raw, FIXTURES / "approved-manifest.json", sanitized, "RS_DATASET_TEST_SECRET")
+    stale = tmp_path / ".labels.staging"
+    stale.mkdir()
+    (stale / "marker.txt").write_text("keep", encoding="utf-8")
+
+    result = export_labels(sanitized, tmp_path / "labels")
+
+    assert result.output_files[0].is_file()
+    assert (stale / "marker.txt").read_text(encoding="utf-8") == "keep"
+
+
 def test_duplicate_comments_and_cross_video_clusters_are_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
