@@ -13,6 +13,7 @@ from .analysis import (
 )
 from .requests import AnalysisRequest
 from .results import AnalysisResult
+from .sampling import SamplingManifest, SamplingStratum, VideoDirection, VideoMetrics
 
 __all__ = [
     "AnalysisRequest",
@@ -25,5 +26,9 @@ __all__ = [
     "NeedSignal",
     "OpportunityCandidate",
     "OpportunityMergeDecision",
+    "SamplingManifest",
+    "SamplingStratum",
     "TokenUsage",
+    "VideoDirection",
+    "VideoMetrics",
 ]
