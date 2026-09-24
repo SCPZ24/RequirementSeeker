@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from requirementseeker_dataset.contracts import SamplingManifest, SanitizationReport
+from requirementseeker_dataset.labels import export_labels
 from requirementseeker_dataset.sanitize import SanitizationError, sanitize_root
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -54,6 +55,32 @@ def test_sanitize_writes_no_raw_ids_or_secret(
     assert "comment-1" not in rendered
     assert SECRET not in rendered
     assert _tree_digest(raw) == before
+
+
+def test_private_handle_is_absent_from_sanitized_and_blank_labels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _prepare_raw(tmp_path)
+    comments_path = raw / "bilibili" / "BVfake" / "comments.jsonl"
+    comments = [json.loads(line) for line in comments_path.read_text(encoding="utf-8").splitlines()]
+    comments[0]["text"] = "联系 @private_123"
+    comments_path.write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in comments),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+
+    result = sanitize_root(raw, PLAN_FIXTURE, tmp_path / "sanitized", "RS_DATASET_TEST_SECRET")
+    report = SanitizationReport.model_validate_json(result.sanitization_reports[0].read_bytes())
+    comments_output = result.sanitization_reports[0].with_name("comments.jsonl")
+    labels = export_labels(tmp_path / "sanitized", tmp_path / "labels")
+
+    assert "@private_123" not in comments_output.read_text(encoding="utf-8")
+    assert "[HANDLE]" in comments_output.read_text(encoding="utf-8")
+    assert "@private_123" not in result.sanitization_reports[0].read_text(encoding="utf-8")
+    assert "@private_123" not in labels.output_files[0].read_text(encoding="utf-8")
+    assert report.replacement_counts["handle"] == 1
+    assert report.rules_version == "pii-v2"
 
 
 def test_sanitize_emits_m2_sampling_manifest(

@@ -9,6 +9,10 @@ from requirementseeker_dataset.text import sanitize_text
         ("联系 13800138000", "联系 [PHONE]", "phone"),
         ("发到 a@example.com", "发到 [EMAIL]", "email"),
         ("微信 abc_123", "[HANDLE]", "handle"),
+        ("微信号：abcde12345", "[HANDLE]", "handle"),
+        ("QQ号：123456789", "[HANDLE]", "handle"),
+        ("QQ号123456789", "[HANDLE]", "handle"),
+        ("联系 @private_123", "联系 [HANDLE]", "handle"),
     ],
 )
 def test_direct_identifiers_are_replaced(source: str, expected: str, category: str) -> None:
@@ -17,6 +21,22 @@ def test_direct_identifiers_are_replaced(source: str, expected: str, category: s
     assert result.text == expected
     assert result.replacement_counts == {category: 1}
     assert result.review_reasons == []
+
+
+def test_email_and_at_handle_are_redacted_separately() -> None:
+    result = sanitize_text("发到 a@example.com 并联系 @private_123")
+
+    assert result.text == "发到 [EMAIL] 并联系 [HANDLE]"
+    assert result.replacement_counts == {"email": 1, "handle": 1}
+    assert "a@example.com" not in result.text
+    assert "@private_123" not in result.text
+
+
+def test_ordinary_qq_word_is_preserved() -> None:
+    result = sanitize_text("qqmusic 可以播放")
+
+    assert result.text == "qqmusic 可以播放"
+    assert result.replacement_counts == {}
 
 
 def test_semantic_content_and_internal_spaces_are_preserved() -> None:

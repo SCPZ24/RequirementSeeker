@@ -8,7 +8,14 @@ from dataclasses import dataclass
 EMAIL_PATTERN = re.compile(r"(?i)(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?![\w.-])")
 PHONE_PATTERN = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 IDENTITY_PATTERN = re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")
-PRIVATE_HANDLE_PATTERN = re.compile(r"(?i)(?:微信|wx|vx|v信|qq|私信)[:：\s]*[a-z0-9_-]{5,32}")
+PRIVATE_HANDLE_PATTERN = re.compile(
+    r"(?i)(?:"
+    r"(?<![a-z0-9_])(?:"
+    r"(?:微信号|qq号)[:：\s]*|(?:微信|qq|wx|vx|v信|私信)[:：\s]+"
+    r")[a-z0-9_-]{5,32}(?![a-z0-9_-])"
+    r"|(?<![\w.+-])@[a-z0-9_][a-z0-9_-]{1,31}(?![a-z0-9_-])"
+    r")"
+)
 EXPLICIT_ADDRESS_PATTERN = re.compile(r"地址[:：]\s*[^，,。\n]{4,80}(?=[，,。\n]|$)")
 PRECISE_ADDRESS_CANDIDATE = re.compile(r"[\u4e00-\u9fff]{2,}(?:路|街|巷)\s*\d+\s*号")
 

@@ -30,7 +30,7 @@ from .source import RawVideoBundle, _is_path_redirect, read_raw_video
 from .split import stable_split
 from .text import TextResult, sanitize_text
 
-_RULES_VERSION = "pii-v1"
+_RULES_VERSION = "pii-v2"
 _DIRECTION_MAP: dict[str, VideoDirection] = {
     "software_tools": "software_tool",
     "tutorial_workflow": "tutorial_workflow",
