@@ -131,9 +131,9 @@ class VideoMetrics(Contract):
 
 
 class SamplingManifest(Contract):
-    """独立复刻 M2 1.0 采样清单，避免数据工具依赖 Agent。"""
+    """独立复刻 M2 采样清单，避免数据工具依赖 Agent。"""
 
-    sampling_schema_version: Literal["1.0"]
+    sampling_schema_version: Literal["1.0", "1.1"]
     manifest_id: Identifier
     platform: Platform
     video_id: PseudonymousVideoId
@@ -147,7 +147,7 @@ class SamplingManifest(Contract):
     direction: VideoDirection
     author_id_present: NonNegativeInt
     distinct_author_count: NonNegativeInt
-    exact_duplicate_count: NonNegativeInt
+    exact_duplicate_count: NonNegativeInt | None
     normalized_duplicate_count: NonNegativeInt
     video_metrics: VideoMetrics | None
     candidate_comment_ids: list[PseudonymousCommentId]
@@ -163,13 +163,15 @@ class SamplingManifest(Contract):
     def integrity(self) -> Self:
         """拒绝不可能的计数和无法追溯到候选池的分层引用。"""
 
+        if self.sampling_schema_version == "1.0" and self.exact_duplicate_count is None:
+            raise ValueError("exact_duplicate_count_unknown_in_1_0")
         if self.pages_succeeded > self.pages_requested:
             raise ValueError("successful_pages_exceed_requested_pages")
         if self.author_id_present > self.collected_total:
             raise ValueError("author_count_exceeds_collected_total")
         if self.distinct_author_count > self.author_id_present:
             raise ValueError("distinct_author_count_exceeds_known_authors")
-        duplicate_count = self.exact_duplicate_count + self.normalized_duplicate_count
+        duplicate_count = (self.exact_duplicate_count or 0) + self.normalized_duplicate_count
         if duplicate_count > self.collected_total:
             raise ValueError("duplicate_count_exceeds_collected_total")
         if len(self.candidate_comment_ids) != len(set(self.candidate_comment_ids)):

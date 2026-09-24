@@ -161,6 +161,25 @@ def test_sampling_manifest_rejects_impossible_counts_or_duplicates(
         SamplingManifest.model_validate(manifest_data(**override))
 
 
+def test_sampling_manifest_versions_preserve_known_and_unknown_duplicate_count() -> None:
+    legacy = SamplingManifest.model_validate(manifest_data())
+    known = SamplingManifest.model_validate(
+        manifest_data(sampling_schema_version="1.1", exact_duplicate_count=0)
+    )
+    unknown = SamplingManifest.model_validate(
+        manifest_data(sampling_schema_version="1.1", exact_duplicate_count=None)
+    )
+
+    assert legacy.exact_duplicate_count == 1
+    assert known.exact_duplicate_count == 0
+    assert unknown.model_dump(mode="json")["exact_duplicate_count"] is None
+
+
+def test_sampling_manifest_rejects_unknown_count_in_version_1_0() -> None:
+    with pytest.raises(ValidationError, match="exact_duplicate_count_unknown_in_1_0"):
+        SamplingManifest.model_validate(manifest_data(exact_duplicate_count=None))
+
+
 def test_sampling_manifest_rejects_invalid_stratum_references() -> None:
     unknown = deepcopy(manifest_data())
     unknown["stratum_comment_ids"] = {

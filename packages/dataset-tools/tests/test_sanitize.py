@@ -66,8 +66,10 @@ def test_sanitize_emits_m2_sampling_manifest(
     manifest = SamplingManifest.model_validate_json(result.sampling_manifests[0].read_bytes())
 
     assert manifest.direction == "software_tool"
+    assert manifest.sampling_schema_version == "1.1"
+    assert manifest.exact_duplicate_count is None
     assert manifest.collection_target == 2
-    assert manifest.collected_total == 2
+    assert manifest.collected_total == len(manifest.candidate_comment_ids) == 2
     assert manifest.video_id.startswith("video_")
     assert manifest.available_strata == {"top", "replies"}
     assert all(
@@ -75,6 +77,24 @@ def test_sanitize_emits_m2_sampling_manifest(
         for values in manifest.stratum_comment_ids.values()
         for item in values
     )
+
+
+def test_sanitize_carries_known_exact_duplicate_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _prepare_raw(tmp_path)
+    collection_path = raw / "bilibili" / "BVfake" / "collection.json"
+    collection = _read_json(collection_path)
+    collection.update(collection_schema_version="1.1", exact_duplicate_count=2)
+    collection_path.write_text(json.dumps(collection, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+
+    result = sanitize_root(raw, PLAN_FIXTURE, tmp_path / "sanitized", "RS_DATASET_TEST_SECRET")
+    manifest = SamplingManifest.model_validate_json(result.sampling_manifests[0].read_bytes())
+
+    assert manifest.sampling_schema_version == "1.1"
+    assert manifest.exact_duplicate_count == 2
+    assert manifest.collected_total == len(manifest.candidate_comment_ids) + 2
 
 
 def test_only_approved_directories_are_processed(

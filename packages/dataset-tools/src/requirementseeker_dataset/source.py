@@ -83,6 +83,8 @@ class CollectionErrorInput(RawContract):
 
 
 class CollectionInput(RawContract):
+    collection_schema_version: Literal["1.1"] | None = None
+    exact_duplicate_count: NonNegativeInt | None = None
     reported_total: NonNegativeInt | None
     collected_total: NonNegativeInt
     pages_requested: NonNegativeInt
@@ -94,6 +96,12 @@ class CollectionInput(RawContract):
 
     @model_validator(mode="after")
     def integrity(self) -> Self:
+        version_present = "collection_schema_version" in self.model_fields_set
+        count_present = "exact_duplicate_count" in self.model_fields_set
+        if version_present != count_present or (
+            version_present and self.collection_schema_version is None
+        ):
+            raise ValueError("collection_duplicate_count_fields_unpaired")
         if self.pages_succeeded > self.pages_requested:
             raise ValueError("pages_succeeded_exceeds_requested")
         if self.collection_finished_at < self.collection_started_at:

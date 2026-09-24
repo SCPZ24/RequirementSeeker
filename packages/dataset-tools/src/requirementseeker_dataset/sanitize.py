@@ -225,9 +225,8 @@ def _sampling_manifest(
     bundle: RawVideoBundle,
     plan_video: _PlanVideo,
 ) -> SamplingManifest:
-    exact_duplicates = sum(
-        error.category == "exact_duplicate_merged" for error in bundle.collection.collection_errors
-    )
+    exact_duplicates = bundle.collection.exact_duplicate_count
+    known_exact = exact_duplicates if exact_duplicates is not None else 0
     normalized = Counter(" ".join(comment.text.casefold().split()) for comment in comments)
     normalized_duplicates = sum(count - 1 for count in normalized.values())
     authors = [comment.author_id for comment in comments if comment.author_id is not None]
@@ -237,14 +236,14 @@ def _sampling_manifest(
         for stratum in sorted(strata)
     }
     return SamplingManifest(
-        sampling_schema_version="1.0",
+        sampling_schema_version="1.1",
         manifest_id=f"manifest_{video.video_id.removeprefix('video_')}",
         platform=video.platform,
         video_id=video.video_id,
         captured_at=video.captured_at,
         reported_total=bundle.collection.reported_total,
         collection_target=_collection_target(bundle.collection.reported_total),
-        collected_total=len(comments) + exact_duplicates,
+        collected_total=len(comments) + known_exact,
         pages_requested=bundle.collection.pages_requested,
         pages_succeeded=bundle.collection.pages_succeeded,
         available_strata=strata,

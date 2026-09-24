@@ -71,7 +71,49 @@ def test_source_reads_exact_three_file_directory() -> None:
 
     assert source.video.raw_video_id == "BVfake"
     assert source.collection.collected_total == len(source.comments) == 2
+    assert source.collection.exact_duplicate_count is None
     assert isinstance(source.comments, tuple)
+
+
+@pytest.mark.parametrize("count", [None, 0, 2])
+def test_source_reads_versioned_duplicate_count(tmp_path: Path, count: int | None) -> None:
+    directory = _copy_valid(tmp_path)
+    collection = _load_json(directory / "collection.json")
+    collection.update(collection_schema_version="1.1", exact_duplicate_count=count)
+    _write_json(directory / "collection.json", collection)
+
+    source = read_raw_video(directory)
+
+    assert source.collection.collection_schema_version == "1.1"
+    assert source.collection.exact_duplicate_count == count
+
+
+@pytest.mark.parametrize(
+    "version_present,count_present,version,count",
+    [
+        (False, True, None, None),
+        (False, True, None, 2),
+        (True, False, "1.1", None),
+        (True, True, None, None),
+    ],
+)
+def test_source_rejects_unpaired_duplicate_count_fields(
+    tmp_path: Path,
+    version_present: bool,
+    count_present: bool,
+    version: str | None,
+    count: int | None,
+) -> None:
+    directory = _copy_valid(tmp_path)
+    collection = _load_json(directory / "collection.json")
+    if version_present:
+        collection["collection_schema_version"] = version
+    if count_present:
+        collection["exact_duplicate_count"] = count
+    _write_json(directory / "collection.json", collection)
+
+    with pytest.raises(RawDatasetError, match="raw_collection_invalid"):
+        read_raw_video(directory)
 
 
 def test_loaded_bundle_models_are_immutable() -> None:
