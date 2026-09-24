@@ -102,6 +102,28 @@ def test_valid_documents_pass_standard_json_schema(kind: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("fields", "valid"),
+    [
+        ({}, True),
+        ({"collection_schema_version": "1.1", "exact_duplicate_count": 0}, True),
+        ({"collection_schema_version": "1.1", "exact_duplicate_count": None}, True),
+        ({"exact_duplicate_count": None}, False),
+        ({"collection_schema_version": "1.1"}, False),
+        ({"collection_schema_version": None, "exact_duplicate_count": None}, False),
+    ],
+)
+def test_collection_schema_requires_paired_provenance_fields(
+    fields: dict[str, Any], valid: bool
+) -> None:
+    document = {**VALID_DOCUMENTS["collection"], **fields}
+    schema = json.loads((ROOT / "schemas" / "collection.schema.json").read_text(encoding="utf-8"))
+    errors = list(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document)
+    )
+    assert (not errors) is valid
+
+
+@pytest.mark.parametrize(
     ("platform", "url"),
     [
         ("bilibili", "HTTPS://WWW.BILIBILI.COM/video/BV1"),

@@ -164,6 +164,19 @@ def test_collection_rejects_duplicate_count_without_version() -> None:
         CollectionRecord.model_validate(collection_data(exact_duplicate_count=0))
 
 
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"exact_duplicate_count": None},
+        {"collection_schema_version": "1.1"},
+        {"collection_schema_version": None, "exact_duplicate_count": None},
+    ],
+)
+def test_collection_requires_paired_version_and_count(fields: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError, match="duplicate_provenance_fields_invalid"):
+        CollectionRecord.model_validate(collection_data(**fields))
+
+
 def test_collection_rejects_unknown_version() -> None:
     with pytest.raises(ValidationError):
         CollectionRecord.model_validate(collection_data(collection_schema_version="1.2"))

@@ -66,6 +66,24 @@
     }
   },
   "additionalProperties": false,
+  "dependentRequired": {
+    "collection_schema_version": [
+      "exact_duplicate_count"
+    ],
+    "exact_duplicate_count": [
+      "collection_schema_version"
+    ]
+  },
+  "not": {
+    "properties": {
+      "collection_schema_version": {
+        "type": "null"
+      }
+    },
+    "required": [
+      "collection_schema_version"
+    ]
+  },
   "properties": {
     "collection_schema_version": {
       "anyOf": [
