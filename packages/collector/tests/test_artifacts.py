@@ -178,6 +178,29 @@ def test_writer_preserves_collection_provenance_presence(
     assert validate_generation(staging)[2] == collection
 
 
+def test_writer_keeps_nested_error_defaults(tmp_path: Path) -> None:
+    video, comments, _ = valid_models()
+    collection = CollectionRecord.model_validate(
+        collection_data(
+            collection_errors=[
+                {
+                    "category": "partial",
+                    "occurred_at": "2026-09-09T01:00:00Z",
+                    "stage": "runner",
+                    "description": "partial",
+                }
+            ]
+        )
+    )
+
+    staging = tmp_path / "staging"
+    write_generation(staging, video, comments, collection)
+
+    saved = json.loads((staging / "collection.json").read_text(encoding="utf-8"))
+    assert saved["collection_errors"][0]["raw_comment_id"] is None
+    assert saved["collection_errors"][0]["conflict_fields"] == []
+
+
 @pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
 def test_writer_round_trips_unicode_line_separators(tmp_path: Path, separator: str) -> None:
     staging = tmp_path / "staging"

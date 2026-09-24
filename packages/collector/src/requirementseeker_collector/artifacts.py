@@ -85,7 +85,7 @@ def _serialize_generation(
         return (
             ("video.json", video.model_dump_json()),
             ("comments.jsonl", "".join(f"{item.model_dump_json()}\n" for item in comments)),
-            ("collection.json", collection.model_dump_json(exclude_unset=True)),
+            ("collection.json", collection.model_dump_json()),
         )
     except Exception:
         return None

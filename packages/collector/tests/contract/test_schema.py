@@ -95,6 +95,12 @@ def test_committed_schema_matches_generated_schema(kind: str) -> None:
     Draft202012Validator.check_schema(saved)
 
 
+def test_collection_serialization_schema_keeps_contract_fields() -> None:
+    schema = CollectionRecord.model_json_schema(mode="serialization")
+    assert schema["properties"] == export_schema("collection")["properties"]
+    assert schema["dependentRequired"] == export_schema("collection")["dependentRequired"]
+
+
 @pytest.mark.parametrize("kind", SCHEMA_MODELS)
 def test_valid_documents_pass_standard_json_schema(kind: str) -> None:
     schema = json.loads((ROOT / "schemas" / f"{kind}.schema.json").read_text(encoding="utf-8"))

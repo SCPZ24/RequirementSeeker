@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -156,6 +157,37 @@ def test_collection_version_1_1_accepts_known_or_unknown_count(count: int | None
     assert (collection.collection_schema_version, collection.exact_duplicate_count) == (
         "1.1",
         count,
+    )
+
+
+@pytest.mark.parametrize(
+    ("provenance", "expected"),
+    [
+        ({}, {}),
+        (
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+        ),
+    ],
+)
+def test_collection_default_json_round_trips_provenance_presence(
+    provenance: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    collection = CollectionRecord.model_validate(collection_data(**provenance))
+
+    serialized = collection.model_dump_json()
+    saved = CollectionRecord.model_validate_json(serialized)
+
+    assert saved == collection
+    document = json.loads(serialized)
+    assert {key: document[key] for key in expected} == expected
+    assert ("collection_schema_version" in document) == ("collection_schema_version" in expected)
+    assert ("exact_duplicate_count" in document) == ("exact_duplicate_count" in expected)
+    assert ("collection_schema_version" in collection.model_dump()) == (
+        "collection_schema_version" in expected
+    )
+    assert ("exact_duplicate_count" in collection.model_dump()) == (
+        "exact_duplicate_count" in expected
     )
 
 

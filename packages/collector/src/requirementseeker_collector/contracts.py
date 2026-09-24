@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import (
@@ -171,6 +171,23 @@ class CollectionRecord(Contract):
     collection_started_at: Timestamp
     collection_finished_at: Timestamp
     collection_errors: list[CollectionError]
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        data = super().model_dump(**kwargs)
+        if "collection_schema_version" not in self.model_fields_set:
+            data.pop("collection_schema_version", None)
+            data.pop("exact_duplicate_count", None)
+        return data
+
+    def model_dump_json(self, **kwargs: Any) -> str:
+        if "collection_schema_version" not in self.model_fields_set:
+            fields = {"collection_schema_version", "exact_duplicate_count"}
+            exclude = kwargs.get("exclude")
+            if isinstance(exclude, dict):
+                kwargs["exclude"] = {**exclude, **dict.fromkeys(fields, True)}
+            else:
+                kwargs["exclude"] = fields if exclude is None else set(exclude) | fields
+        return super().model_dump_json(**kwargs)
 
     @model_validator(mode="after")
     def integrity(self) -> Self:
