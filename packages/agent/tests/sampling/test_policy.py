@@ -55,7 +55,7 @@ def make_manifest(
         }
     return SamplingManifest.model_validate(
         {
-            "sampling_schema_version": "1.0",
+            "sampling_schema_version": "1.1",
             "manifest_id": "manifest-1",
             "platform": "bilibili",
             "video_id": "video-1",
@@ -109,6 +109,18 @@ def make_manifest(
 )
 def test_quality_gate(manifest: SamplingManifest, expected: str) -> None:
     assert assess_quality(manifest).status == expected
+
+
+def test_unknown_duplicate_provenance_is_never_usable() -> None:
+    trusted = make_manifest(make_comments(100))
+    for version, exact in [("1.0", 0), ("1.1", None)]:
+        candidate = trusted.model_copy(
+            update={"sampling_schema_version": version, "exact_duplicate_count": exact}
+        )
+        quality = assess_quality(candidate)
+        assert quality.status == "degraded"
+        assert quality.duplicate_rate is None
+    assert assess_quality(trusted).status == "usable"
 
 
 def test_dynamic_target_applies_direction_quality_and_budget_caps() -> None:
