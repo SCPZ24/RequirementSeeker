@@ -414,6 +414,51 @@ def test_pilot_merges_previous_comments_and_records_identity_conflict(tmp_path: 
     assert "changed identity" not in conflict.description
 
 
+def test_pilot_persists_accepted_duplicate_observations(tmp_path: Path) -> None:
+    first = browser_result(comments=[comment("c1"), comment("c1", rank=2), comment("c2")])
+    assert run_pilot(request(), first, output_root=tmp_path).status == "success"
+    target = tmp_path / "raw" / "bilibili" / "BVfake"
+    _, _, initial = validate_generation(target)
+    assert (initial.collection_schema_version, initial.exact_duplicate_count) == ("1.1", 1)
+
+    second = browser_result(comments=[comment("c1"), comment("c3")])
+    assert run_pilot(request(), second, output_root=tmp_path).status == "success"
+    _, _, accumulated = validate_generation(target)
+    assert accumulated.exact_duplicate_count == 2
+
+
+def test_pilot_does_not_count_repeated_ids_dropped_by_target(tmp_path: Path) -> None:
+    observed = [comment("c1"), comment("c2"), comment("c3"), comment("c3", rank=2)]
+    result = run_pilot(request(), browser_result(comments=observed), output_root=tmp_path)
+    assert result.status == "success"
+    _, comments, collection = validate_generation(tmp_path / "raw" / "bilibili" / "BVfake")
+    assert [item.raw_comment_id for item in comments] == ["c1", "c2"]
+    assert collection.exact_duplicate_count == 0
+
+
+def test_pilot_does_not_count_merge_conflicting_id(tmp_path: Path) -> None:
+    assert run_pilot(request(), browser_result(), output_root=tmp_path).status == "success"
+    observed = [comment("c1", text="changed"), comment("c1", text="changed", rank=2), comment("c3")]
+    result = run_pilot(request(), browser_result(comments=observed), output_root=tmp_path)
+    assert result.status == "success"
+    _, _, collection = validate_generation(tmp_path / "raw" / "bilibili" / "BVfake")
+    assert collection.exact_duplicate_count == 0
+
+
+def test_pilot_keeps_legacy_duplicate_count_unknown(tmp_path: Path) -> None:
+    assert run_pilot(request(), browser_result(), output_root=tmp_path).status == "success"
+    target = tmp_path / "raw" / "bilibili" / "BVfake"
+    collection_path = target / "collection.json"
+    legacy = json.loads(collection_path.read_text(encoding="utf-8"))
+    del legacy["collection_schema_version"]
+    del legacy["exact_duplicate_count"]
+    collection_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+    assert run_pilot(request(), browser_result(), output_root=tmp_path).status == "success"
+    _, _, collection = validate_generation(target)
+    assert (collection.collection_schema_version, collection.exact_duplicate_count) == ("1.1", None)
+
+
 def test_pilot_recovers_pending_valid_backup_before_merging_current_comments(
     tmp_path: Path,
 ) -> None:

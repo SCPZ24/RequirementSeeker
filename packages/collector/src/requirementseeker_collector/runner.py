@@ -661,11 +661,12 @@ def run_pilot(
                 )
             return finish(_result(request, video_key, recovery_error), errors)
     previous: list[RawComment] = []
+    previous_collection: CollectionRecord | None = None
     if target.exists() or target.is_symlink():
         if target.is_symlink():
             return finish(_result(request, video_key, "previous_artifacts_invalid"), errors)
         try:
-            previous_video, previous, _ = validate_generation(target)
+            previous_video, previous, previous_collection = validate_generation(target)
         except ArtifactValidationError:
             return finish(_result(request, video_key, "previous_artifacts_invalid"))
         if (
@@ -680,6 +681,18 @@ def run_pilot(
         merged = merge_comments(previous, selected)
     except (CurrentRunConflict, PreviousRunConflict):
         return finish(_result(request, video_key, "comment_merge_failed"), errors)
+    conflict_ids = {item.raw_comment_id for item in merged.conflicts}
+    accepted_ids = {item.raw_comment_id for item in selected} - conflict_ids
+    observations = sum(item.raw_comment_id in accepted_ids for item in browser_result.comments)
+    previous_ids = {item.raw_comment_id for item in previous}
+    new_duplicates = observations - len(accepted_ids) + len(accepted_ids & previous_ids)
+    exact_duplicate_count = (
+        new_duplicates
+        if previous_collection is None
+        else None
+        if previous_collection.exact_duplicate_count is None
+        else previous_collection.exact_duplicate_count + new_duplicates
+    )
 
     if decision.reason is not None:
         errors.append(_collection_error(decision.reason, browser_result.collection_finished_at))
@@ -694,6 +707,8 @@ def run_pilot(
         )
     try:
         collection = CollectionRecord(
+            collection_schema_version="1.1",
+            exact_duplicate_count=exact_duplicate_count,
             reported_total=video.total_comment_count,
             collected_total=len(merged.comments),
             pages_requested=browser_result.pages_requested,
@@ -1279,6 +1294,8 @@ def collect_from_page(
     assert video is not None
     finished = datetime.now(UTC)
     collection = CollectionRecord(
+        collection_schema_version="1.1",
+        exact_duplicate_count=None,
         reported_total=video.total_comment_count,
         collected_total=len(comments),
         pages_requested=pages_requested,

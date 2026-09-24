@@ -148,6 +148,8 @@ class CollectionError(Contract):
 
 
 class CollectionRecord(Contract):
+    collection_schema_version: Literal["1.1"] | None = None
+    exact_duplicate_count: NonNegativeInt | None = None
     reported_total: NonNegativeInt | None
     collected_total: NonNegativeInt
     pages_requested: NonNegativeInt
@@ -159,6 +161,8 @@ class CollectionRecord(Contract):
 
     @model_validator(mode="after")
     def integrity(self) -> Self:
+        if self.collection_schema_version is None and self.exact_duplicate_count is not None:
+            raise ValueError("duplicate_count_without_version")
         if self.pages_succeeded > self.pages_requested:
             raise ValueError("pages_succeeded_exceeds_requested")
         if self.collection_finished_at < self.collection_started_at:

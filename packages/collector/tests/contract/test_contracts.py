@@ -143,6 +143,32 @@ def test_collection_rejects_more_successes_than_requests() -> None:
         CollectionRecord.model_validate(collection_data(pages_requested=1, pages_succeeded=2))
 
 
+def test_legacy_collection_has_unknown_duplicate_count() -> None:
+    collection = CollectionRecord.model_validate(collection_data())
+    assert (collection.collection_schema_version, collection.exact_duplicate_count) == (None, None)
+
+
+@pytest.mark.parametrize("count", [0, None])
+def test_collection_version_1_1_accepts_known_or_unknown_count(count: int | None) -> None:
+    collection = CollectionRecord.model_validate(
+        collection_data(collection_schema_version="1.1", exact_duplicate_count=count)
+    )
+    assert (collection.collection_schema_version, collection.exact_duplicate_count) == (
+        "1.1",
+        count,
+    )
+
+
+def test_collection_rejects_duplicate_count_without_version() -> None:
+    with pytest.raises(ValidationError, match="duplicate_count_without_version"):
+        CollectionRecord.model_validate(collection_data(exact_duplicate_count=0))
+
+
+def test_collection_rejects_unknown_version() -> None:
+    with pytest.raises(ValidationError):
+        CollectionRecord.model_validate(collection_data(collection_schema_version="1.2"))
+
+
 @pytest.mark.parametrize(
     ("model", "factory", "field"),
     [
