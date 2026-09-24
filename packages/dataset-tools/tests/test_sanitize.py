@@ -63,7 +63,9 @@ def test_private_handle_is_absent_from_sanitized_and_blank_labels(
     raw = _prepare_raw(tmp_path)
     comments_path = raw / "bilibili" / "BVfake" / "comments.jsonl"
     comments = [json.loads(line) for line in comments_path.read_text(encoding="utf-8").splitlines()]
-    comments[0]["text"] = "联系 @private_123"
+    handles = ("@private_123", "@private_456", "@private_789")
+    comments[0]["text"] = f"联系{handles[0]} 联系.{handles[1]}"
+    comments[1]["text"] = f"联系-{handles[2]}"
     comments_path.write_text(
         "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in comments),
         encoding="utf-8",
@@ -75,11 +77,16 @@ def test_private_handle_is_absent_from_sanitized_and_blank_labels(
     comments_output = result.sanitization_reports[0].with_name("comments.jsonl")
     labels = export_labels(tmp_path / "sanitized", tmp_path / "labels")
 
-    assert "@private_123" not in comments_output.read_text(encoding="utf-8")
-    assert "[HANDLE]" in comments_output.read_text(encoding="utf-8")
-    assert "@private_123" not in result.sanitization_reports[0].read_text(encoding="utf-8")
-    assert "@private_123" not in labels.output_files[0].read_text(encoding="utf-8")
-    assert report.replacement_counts["handle"] == 1
+    comments_text = comments_output.read_text(encoding="utf-8")
+    report_text = result.sanitization_reports[0].read_text(encoding="utf-8")
+    annotation_text = labels.output_files[0].read_text(encoding="utf-8")
+    assert all(
+        handle not in output
+        for handle in handles
+        for output in (comments_text, report_text, annotation_text)
+    )
+    assert comments_text.count("[HANDLE]") == 3
+    assert report.replacement_counts["handle"] == 3
     assert report.rules_version == "pii-v2"
 
 

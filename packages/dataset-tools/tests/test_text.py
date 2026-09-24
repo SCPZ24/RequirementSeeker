@@ -18,6 +18,9 @@ from requirementseeker_dataset.text import sanitize_text
         ("QQ号：123456789", "[HANDLE]", "handle"),
         ("QQ号123456789", "[HANDLE]", "handle"),
         ("联系 @private_123", "联系 [HANDLE]", "handle"),
+        ("联系@private_123", "联系[HANDLE]", "handle"),
+        ("联系.@private_123", "联系.[HANDLE]", "handle"),
+        ("联系-@private_123", "联系-[HANDLE]", "handle"),
     ],
 )
 def test_direct_identifiers_are_replaced(source: str, expected: str, category: str) -> None:

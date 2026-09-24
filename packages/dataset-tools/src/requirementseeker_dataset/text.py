@@ -13,7 +13,7 @@ PRIVATE_HANDLE_PATTERN = re.compile(
     r"(?<![a-z0-9_])(?:"
     r"(?:微信号?|wx|vx|v信|私信|qq号)[:：\s]*|qq[:：\s]+"
     r")[a-z0-9_-]{5,32}(?![a-z0-9_-])"
-    r"|(?<![\w.+-])@[a-z0-9_][a-z0-9_-]{1,31}(?![a-z0-9_-])"
+    r"|@[a-z0-9_][a-z0-9_-]{1,31}(?![a-z0-9_-])"
     r")"
 )
 EXPLICIT_ADDRESS_PATTERN = re.compile(r"地址[:：]\s*[^，,。\n]{4,80}(?=[，,。\n]|$)")
