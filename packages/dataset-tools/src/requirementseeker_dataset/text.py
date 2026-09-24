@@ -11,7 +11,7 @@ IDENTITY_PATTERN = re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")
 PRIVATE_HANDLE_PATTERN = re.compile(
     r"(?i)(?:"
     r"(?<![a-z0-9_])(?:"
-    r"(?:微信号|qq号)[:：\s]*|(?:微信|qq|wx|vx|v信|私信)[:：\s]+"
+    r"(?:微信号?|wx|vx|v信|私信|qq号)[:：\s]*|qq[:：\s]+"
     r")[a-z0-9_-]{5,32}(?![a-z0-9_-])"
     r"|(?<![\w.+-])@[a-z0-9_][a-z0-9_-]{1,31}(?![a-z0-9_-])"
     r")"
