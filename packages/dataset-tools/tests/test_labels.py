@@ -66,6 +66,9 @@ def test_root_eligibility_requires_matching_sanitized_source(
     _write_annotation(result.output_files[0], _completed(result.annotations[0], "annotator-one"))
     (tmp_path / "labels" / "README.md").write_text("notes", encoding="utf-8")
     (tmp_path / "sanitized" / "README.md").write_text("notes", encoding="utf-8")
+    report_only = tmp_path / "sanitized" / "douyin" / f"video_{'f' * 32}"
+    report_only.mkdir(parents=True)
+    (report_only / "sanitization.json").write_text("{}", encoding="utf-8")
 
     validation = validate_label_root(tmp_path / "labels", tmp_path / "sanitized")
 
@@ -159,6 +162,22 @@ def test_root_rejects_orphan_label_video_artifact(
         validate_label_root(tmp_path / "labels", tmp_path / "sanitized")
 
 
+@pytest.mark.parametrize("artifact", ["annotation-secondary.json", "adjudication.json"])
+def test_root_rejects_reserved_label_artifact_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, artifact: str
+) -> None:
+    result = _export(tmp_path, monkeypatch)
+    _write_annotation(result.output_files[0], _completed(result.annotations[0], "annotator-one"))
+    assert (
+        validate_label_root(tmp_path / "labels", tmp_path / "sanitized").evaluation_eligible_count
+        == 1
+    )
+    result.output_files[0].with_name(artifact).mkdir()
+
+    with pytest.raises(LabelValidationError, match="label_source_set_mismatch"):
+        validate_label_root(tmp_path / "labels", tmp_path / "sanitized")
+
+
 def test_root_rejects_orphan_sanitized_video_comments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -171,6 +190,24 @@ def test_root_rejects_orphan_sanitized_video_comments(
     orphan = tmp_path / "sanitized" / "douyin" / f"video_{'f' * 32}" / "comments.jsonl"
     orphan.parent.mkdir(parents=True)
     orphan.write_text("", encoding="utf-8")
+
+    with pytest.raises(LabelValidationError, match="label_source_set_mismatch"):
+        validate_label_root(tmp_path / "labels", tmp_path / "sanitized")
+
+
+@pytest.mark.parametrize("artifact", ["video.json", "collection.json"])
+def test_root_rejects_orphan_included_video_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, artifact: str
+) -> None:
+    result = _export(tmp_path, monkeypatch)
+    _write_annotation(result.output_files[0], _completed(result.annotations[0], "annotator-one"))
+    assert (
+        validate_label_root(tmp_path / "labels", tmp_path / "sanitized").evaluation_eligible_count
+        == 1
+    )
+    orphan = tmp_path / "sanitized" / "douyin" / f"video_{'f' * 32}" / artifact
+    orphan.parent.mkdir(parents=True)
+    orphan.write_text("{}", encoding="utf-8")
 
     with pytest.raises(LabelValidationError, match="label_source_set_mismatch"):
         validate_label_root(tmp_path / "labels", tmp_path / "sanitized")
