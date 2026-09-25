@@ -5,9 +5,11 @@ import subprocess
 import sys
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import requirementseeker_dataset.sanitize as sanitize_module
 from requirementseeker_dataset.contracts import SamplingManifest, SanitizationReport
 from requirementseeker_dataset.labels import export_labels
 from requirementseeker_dataset.sanitize import SanitizationError, sanitize_root
@@ -253,6 +255,60 @@ def test_failed_publish_restores_previous_output(
     assert marker.read_text(encoding="utf-8") == "keep"
     assert not list(output.parent.glob(".sanitized.staging.*"))
     assert not output.with_name(".sanitized.backup").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="create-only publishing requires Windows")
+def test_create_only_preserves_target_created_during_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _prepare_raw(tmp_path)
+    output = tmp_path / "sanitized"
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+    original_write = sanitize_module._write_json
+
+    def create_competing_target(path: Path, value: object) -> None:
+        original_write(path, value)
+        if path.name == "sanitization-summary.json":
+            output.mkdir()
+            (output / "sentinel.txt").write_text("keep", encoding="utf-8")
+
+    monkeypatch.setattr(sanitize_module, "_write_json", create_competing_target)
+
+    with pytest.raises(SanitizationError, match="output_commit_failed"):
+        sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET", create_only=True)
+
+    assert (output / "sentinel.txt").read_text(encoding="utf-8") == "keep"
+    assert not list(tmp_path.glob(".sanitized.staging.*"))
+    assert not output.with_name(".sanitized.backup").exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="create-only publishing requires Windows")
+def test_create_only_publishes_to_absent_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _prepare_raw(tmp_path)
+    output = tmp_path / "sanitized"
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+
+    result = sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET", create_only=True)
+
+    assert len(result.sampling_manifests) == 1
+    assert output.is_dir()
+    assert not output.with_name(".sanitized.backup").exists()
+
+
+def test_create_only_fails_closed_on_other_platforms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "sanitized"
+    monkeypatch.setattr(sanitize_module, "os", SimpleNamespace(name="posix"))
+
+    with pytest.raises(SanitizationError, match="create_only_unsupported_platform"):
+        sanitize_root(
+            tmp_path / "raw", PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET", create_only=True
+        )
+
+    assert not output.exists()
 
 
 def test_output_cannot_contain_or_replace_raw_root(

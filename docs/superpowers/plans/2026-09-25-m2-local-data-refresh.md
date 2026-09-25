@@ -10,7 +10,7 @@
 
 ---
 
-Approved design: docs/superpowers/specs/2026-09-25-m2-local-data-refresh-design.md. Work from the existing isolated C:/Users/Fantason/.codex/worktrees/dataset-preparation/RequirementSeeker checkout on codex/m2-data-refresh. This is a local data operation: do not commit or print real text, raw IDs, pseudonymous IDs, or the HMAC value. Do not modify raw/, sanitized/, or labels/. The only planned Git change is this plan; results go to the ignored E:/Projects/RequirementSeeker/docs/HANDOFF.md and docs/execution/2026-09-25.md. Use explicit absolute paths in the real operation, not a guessed working directory.
+Approved design: docs/superpowers/specs/2026-09-25-m2-local-data-refresh-design.md. Work from the existing isolated C:/Users/Fantason/.codex/worktrees/dataset-preparation/RequirementSeeker checkout on codex/m2-data-refresh. This is a local data operation: do not commit or print real text, raw IDs, pseudonymous IDs, or the HMAC value. Do not modify raw/, sanitized/, or labels/. Only scoped sanitizer code, synthetic tests, and documentation belong in Git; results go to the ignored E:/Projects/RequirementSeeker/docs/HANDOFF.md and docs/execution/2026-09-25.md. Use explicit absolute paths in the real operation, not a guessed working directory.
 
 ## File and directory map
 
@@ -35,7 +35,7 @@ uv run --offline --locked --project packages/dataset-tools ruff format --check p
 uv run --offline --locked --project packages/dataset-tools mypy packages/dataset-tools/src
 ~~~
 
-Expected: branch codex/m2-data-refresh, no uncommitted changes, 122 tests passing, and the three static gates exit zero. Stop if any command fails.
+Expected: branch codex/m2-data-refresh, no uncommitted changes, 126 tests passing, and the three static gates exit zero. Stop if any command fails.
 
 - [ ] **Step 2: Verify path and manifest preconditions without enumerating identifiers.** Run in PowerShell 7; only the booleans and digest may be displayed:
 
@@ -85,21 +85,40 @@ if ($files.Count -ne 24 -or $editedFiles -or $editedComments -or $extraFiles) { 
 [pscustomobject]@{PrimaryFiles=$files.Count; EditedFiles=$editedFiles; EditedComments=$editedComments; ExtraFiles=$extraFiles}
 ~~~
 
-- [ ] **Step 4: Record baseline digests.** Run this exact function for raw/, sanitized/, and labels/; record only the three resulting digests and counts in the local execution log. Run the identical block after generation in Task 5 and require equality. Do not display constituent paths or content:
+- [ ] **Step 4: Record baseline digests.** Run this exact function for raw/, sanitized/, and labels/; record only the three resulting digests and counts in the local execution log. Run the identical block after generation in Task 5 and require equality. Each UTF-8 record is the slash-normalized relative path without a leading separator, NUL, uppercase file SHA-256, then LF; records are sorted with ordinal string comparison. Do not display constituent paths or content:
 
 ~~~powershell
 function Get-TreeDigest([string]$treePath) {
     $resolved = (Resolve-Path -LiteralPath $treePath).Path
-    $files = @(Get-ChildItem -LiteralPath $resolved -Recurse -File | Sort-Object FullName)
-    $rows = @($files | ForEach-Object {
-        $relative = $_.FullName.Substring($resolved.Length).Replace('\','/')
-        $digest = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-        "$relative $digest"
-    })
-    $bytes = [Text.Encoding]::UTF8.GetBytes([string]::Join([Environment]::NewLine, $rows))
-    [pscustomobject]@{
-        Count = $files.Count
-        Digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push($resolved)
+    $files = [Collections.Generic.SortedDictionary[string,string]]::new([StringComparer]::Ordinal)
+    while ($pending.Count -gt 0) {
+        foreach ($child in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)) {
+            if ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'tree_redirect' }
+            if ($child.PSIsContainer) {
+                $pending.Push($child.FullName)
+            } elseif ($child -is [IO.FileInfo]) {
+                $relative = [IO.Path]::GetRelativePath($resolved, $child.FullName).Replace('\','/')
+                $files.Add($relative, $child.FullName)
+            } else {
+                throw 'unexpected_tree_entry'
+            }
+        }
+    }
+    $aggregate = [Security.Cryptography.IncrementalHash]::CreateHash([Security.Cryptography.HashAlgorithmName]::SHA256)
+    try {
+        foreach ($relative in $files.Keys) {
+            $digest = (Get-FileHash -LiteralPath $files[$relative] -Algorithm SHA256).Hash
+            $record = [Text.Encoding]::UTF8.GetBytes($relative + [char]0 + $digest + [char]10)
+            $aggregate.AppendData($record)
+        }
+        [pscustomobject]@{
+            Count = $files.Count
+            Digest = [Convert]::ToHexString($aggregate.GetHashAndReset())
+        }
+    } finally {
+        $aggregate.Dispose()
     }
 }
 $dataRoot = 'E:\Projects\RequirementSeeker\.local-data\m2-real'
@@ -111,7 +130,7 @@ $dataRoot = 'E:\Projects\RequirementSeeker\.local-data\m2-real'
 
 ### Task 2: Generate a new sanitized tree exactly once
 
-- [ ] **Step 1: Recheck that sanitized-v2/ and its backup/staging do not exist.** Reuse Task 1's exact absent-target check immediately before generation. If the target appeared, stop; sanitize would otherwise replace it.
+- [ ] **Step 1: Recheck that sanitized-v2/ and its backup/staging do not exist.** Reuse Task 1's exact absent-target check immediately before generation. If the target appeared, stop. The `--create-only` commit also rejects a target that appears after this check.
 
 - [ ] **Step 2: Run the CLI with the stable secret scoped to one PowerShell process.** Read the registry value in memory without printing it and remove the process environment variable afterward. Do not redirect a command transcript to a file.
 
@@ -121,7 +140,7 @@ $secret = (Get-Item -LiteralPath 'HKCU:\Environment').GetValue('HMAC_SECRET_KEY'
 if ([Text.Encoding]::UTF8.GetByteCount([string]$secret) -lt 32) { throw 'stable_secret_too_short' }
 try {
     $env:HMAC_SECRET_KEY = [string]$secret
-    uv run --offline --locked --project packages/dataset-tools rs-dataset sanitize --raw (Join-Path $dataRoot 'raw') --plan (Join-Path $dataRoot 'candidates\approved-manifest.json') --output (Join-Path $dataRoot 'sanitized-v2') --secret-env HMAC_SECRET_KEY
+    uv run --offline --locked --project packages/dataset-tools rs-dataset sanitize --raw (Join-Path $dataRoot 'raw') --plan (Join-Path $dataRoot 'candidates\approved-manifest.json') --output (Join-Path $dataRoot 'sanitized-v2') --secret-env HMAC_SECRET_KEY --create-only
     if ($LASTEXITCODE -ne 0) { throw 'sanitize_failed' }
 } finally {
     Remove-Item Env:\HMAC_SECRET_KEY -ErrorAction SilentlyContinue
@@ -129,7 +148,7 @@ try {
 }
 ~~~
 
-Expected CLI summary: status ok, 24 sampling manifests, 24 sanitization reports, two excluded raw directories; do not infer readiness from this summary alone. A failure leaves the old baseline untouched; inspect any new target/staging safely and do not rerun over it.
+Expected CLI summary: status ok, 24 sampling manifests, 24 sanitization reports, two excluded raw directories; do not infer readiness from this summary alone. This create-only mode requires Windows; on other platforms it fails before processing because an atomic no-replace directory publish has not been established. A failure leaves the old baseline untouched; inspect any new target/staging safely and do not rerun over it.
 
 ### Task 3: Audit the sanitized tree before exporting labels
 
@@ -261,7 +280,7 @@ if ($files.Count -ne 24 -or $comments -ne 5090 -or $edited -or $extra) { throw '
 
 - [ ] **Step 1: Recompute the raw/, sanitized/, and labels/ tree digests with the exact Task 1 algorithm.** Require all three digests and file counts equal the recorded baselines. Check that no unexpected v2 staging/backup exists. If any change is found, stop and investigate; do not declare readiness or remove anything.
 
-- [ ] **Step 2: Inspect Git state.** Run git status --short --branch in the isolated checkout and root repository. Require no real data staged or tracked. Do not add ignored data to Git. Only the already committed spec and plan may be new tracked content for this stage.
+- [ ] **Step 2: Inspect Git state.** Run git status --short --branch in the isolated checkout and root repository. Require no real data staged or tracked. Do not add ignored data to Git. Only scoped sanitizer code, synthetic tests, and documentation may be new tracked content for this stage.
 
 - [ ] **Step 3: Update ignored handoff and daily log.** Record the code revision, manifest hash, new output names, aggregate counts, old/new tree-digest comparison result, privacy-check categories, command gate outcomes, and any limitation. Use apply_patch; never record raw text, IDs, key values, or full candidate paths. Mark sanitized-v2/ and labels-v2/ as the human-labeling materials only if every check above passed. Keep old directories and worktrees intact.
 

@@ -15,12 +15,14 @@
 ## 命令
 
 ```text
-rs-dataset sanitize --raw <raw-root> --plan <manifest.json> --output <sanitized-root> --secret-env <name>
+rs-dataset sanitize --raw <raw-root> --plan <manifest.json> --output <sanitized-root> --secret-env <name> [--create-only]
 rs-dataset export-labels --sanitized <sanitized-root> --output <label-root>
 rs-dataset validate-labels <label-root> --sanitized <sanitized-root>
 ```
 
 所有命令只向标准输出写一行 ASCII JSON 摘要。失败摘要只包含固定错误码，不回显原始评论、原始 ID 或秘密值。
+
+`sanitize --create-only` 仅用于新目标目录：发布时在 Windows 上使用不会覆盖已存在目标的目录重命名；即使目标在预检后出现，也会失败并保留该目标。其他平台暂不支持此模式，会在处理前拒绝。省略该选项时保留原有的替换与备份恢复行为。
 
 ## 产物与人工流程
 
