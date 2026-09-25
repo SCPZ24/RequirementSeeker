@@ -308,6 +308,9 @@ def _sanitized_sources(sanitized_root: Path) -> dict[tuple[str, str], list[tuple
     manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
     if not manifests:
         raise LabelValidationError("sampling_manifest_missing")
+    manifest_dirs = {path.parent for path in manifests}
+    if any(path.parent not in manifest_dirs for path in sanitized_root.rglob("comments.jsonl")):
+        raise LabelValidationError("label_source_set_mismatch")
     sources: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for path in manifests:
         _require_local_path(path, sanitized_root)
@@ -347,6 +350,13 @@ def validate_label_root(label_root: Path, sanitized_root: Path) -> LabelRootVali
     annotation_paths = sorted(label_root.rglob("annotation.json"))
     if not annotation_paths:
         raise LabelValidationError("annotation_files_missing")
+    annotation_dirs = {path.parent for path in annotation_paths}
+    if any(
+        path.parent not in annotation_dirs
+        for name in ("annotation-secondary.json", "adjudication.json")
+        for path in label_root.rglob(name)
+    ):
+        raise LabelValidationError("label_source_set_mismatch")
     sources = _sanitized_sources(sanitized_root)
     paths: dict[tuple[str, str], Path] = {}
     for path in annotation_paths:
