@@ -66,7 +66,51 @@
     }
   },
   "additionalProperties": false,
+  "dependentRequired": {
+    "collection_schema_version": [
+      "exact_duplicate_count"
+    ],
+    "exact_duplicate_count": [
+      "collection_schema_version"
+    ]
+  },
+  "not": {
+    "properties": {
+      "collection_schema_version": {
+        "type": "null"
+      }
+    },
+    "required": [
+      "collection_schema_version"
+    ]
+  },
   "properties": {
+    "collection_schema_version": {
+      "anyOf": [
+        {
+          "const": "1.1",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Collection Schema Version"
+    },
+    "exact_duplicate_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exact Duplicate Count"
+    },
     "reported_total": {
       "anyOf": [
         {

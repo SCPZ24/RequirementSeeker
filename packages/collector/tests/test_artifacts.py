@@ -149,6 +149,58 @@ def test_writer_creates_complete_round_trippable_generation(tmp_path: Path) -> N
     validate_generation(staging)
 
 
+@pytest.mark.parametrize(
+    ("provenance", "expected_fields"),
+    [
+        ({}, {}),
+        (
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+        ),
+    ],
+)
+def test_writer_preserves_collection_provenance_presence(
+    tmp_path: Path, provenance: dict[str, Any], expected_fields: dict[str, Any]
+) -> None:
+    video, comments, _ = valid_models()
+    collection = CollectionRecord.model_validate(collection_data(**provenance))
+    staging = tmp_path / "staging"
+
+    write_generation(staging, video, comments, collection)
+
+    saved = json.loads((staging / "collection.json").read_text(encoding="utf-8"))
+    assert {key: saved[key] for key in expected_fields} == expected_fields
+    assert ("collection_schema_version" in saved) == (
+        "collection_schema_version" in expected_fields
+    )
+    assert ("exact_duplicate_count" in saved) == ("exact_duplicate_count" in expected_fields)
+    assert set(collection_data()).issubset(saved)
+    assert validate_generation(staging)[2] == collection
+
+
+def test_writer_keeps_nested_error_defaults(tmp_path: Path) -> None:
+    video, comments, _ = valid_models()
+    collection = CollectionRecord.model_validate(
+        collection_data(
+            collection_errors=[
+                {
+                    "category": "partial",
+                    "occurred_at": "2026-09-09T01:00:00Z",
+                    "stage": "runner",
+                    "description": "partial",
+                }
+            ]
+        )
+    )
+
+    staging = tmp_path / "staging"
+    write_generation(staging, video, comments, collection)
+
+    saved = json.loads((staging / "collection.json").read_text(encoding="utf-8"))
+    assert saved["collection_errors"][0]["raw_comment_id"] is None
+    assert saved["collection_errors"][0]["conflict_fields"] == []
+
+
 @pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
 def test_writer_round_trips_unicode_line_separators(tmp_path: Path, separator: str) -> None:
     staging = tmp_path / "staging"

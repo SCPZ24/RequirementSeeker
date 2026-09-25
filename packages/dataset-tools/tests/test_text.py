@@ -1,0 +1,84 @@
+import pytest
+
+from requirementseeker_dataset.text import sanitize_text
+
+
+@pytest.mark.parametrize(
+    ("source", "expected", "category"),
+    [
+        ("联系 13800138000", "联系 [PHONE]", "phone"),
+        ("发到 a@example.com", "发到 [EMAIL]", "email"),
+        ("微信 abc_123", "[HANDLE]", "handle"),
+        ("微信abc_123", "[HANDLE]", "handle"),
+        ("wxabc_123", "[HANDLE]", "handle"),
+        ("vxprivate_123", "[HANDLE]", "handle"),
+        ("v信abc_123", "[HANDLE]", "handle"),
+        ("私信abc_123", "[HANDLE]", "handle"),
+        ("微信号：abcde12345", "[HANDLE]", "handle"),
+        ("QQ号：123456789", "[HANDLE]", "handle"),
+        ("QQ号123456789", "[HANDLE]", "handle"),
+        ("联系 @private_123", "联系 [HANDLE]", "handle"),
+        ("联系@private_123", "联系[HANDLE]", "handle"),
+        ("联系.@private_123", "联系.[HANDLE]", "handle"),
+        ("联系-@private_123", "联系-[HANDLE]", "handle"),
+    ],
+)
+def test_direct_identifiers_are_replaced(source: str, expected: str, category: str) -> None:
+    result = sanitize_text(source)
+
+    assert result.text == expected
+    assert result.replacement_counts == {category: 1}
+    assert result.review_reasons == []
+
+
+def test_email_and_at_handle_are_redacted_separately() -> None:
+    result = sanitize_text("发到 a@example.com 并联系 @private_123")
+
+    assert result.text == "发到 [EMAIL] 并联系 [HANDLE]"
+    assert result.replacement_counts == {"email": 1, "handle": 1}
+    assert "a@example.com" not in result.text
+    assert "@private_123" not in result.text
+
+
+@pytest.mark.parametrize("word", ["qqmusic", "qqmusic123"])
+def test_ordinary_qq_word_is_preserved(word: str) -> None:
+    result = sanitize_text(f"{word} 可以播放")
+
+    assert result.text == f"{word} 可以播放"
+    assert result.replacement_counts == {}
+
+
+def test_semantic_content_and_internal_spaces_are_preserved() -> None:
+    result = sanitize_text("  我需要  一个离线工具\r\n第二行  ")
+
+    assert result.text == "我需要  一个离线工具\n第二行"
+    assert result.replacement_counts == {}
+
+
+def test_unicode_is_normalized_to_nfc() -> None:
+    result = sanitize_text("  Cafe\u0301  ")
+
+    assert result.text == "Café"
+
+
+def test_precise_address_is_replaced_and_marked_for_review() -> None:
+    result = sanitize_text("在幸福路 18 号见")
+
+    assert result.text == "[ADDRESS]见"
+    assert result.replacement_counts == {"address": 1}
+    assert result.review_reasons == ["possible_precise_address"]
+
+
+def test_explicit_full_address_and_identity_number_are_replaced() -> None:
+    result = sanitize_text("地址：上海市幸福路18号，身份证 110101199001011234")
+
+    assert result.text == "[ADDRESS]，身份证 [IDENTIFIER]"
+    assert result.replacement_counts == {"identity": 1, "address": 1}
+    assert result.review_reasons == []
+
+
+def test_repeated_identifier_counts_are_deterministic() -> None:
+    result = sanitize_text("a@example.com 和 b@example.com")
+
+    assert result.text == "[EMAIL] 和 [EMAIL]"
+    assert result.replacement_counts == {"email": 2}

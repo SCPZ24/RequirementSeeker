@@ -8,7 +8,7 @@ from requirementseeker_agent.contracts.sampling import SamplingManifest
 
 def manifest_data(**overrides: object) -> dict[str, object]:
     data: dict[str, object] = {
-        "sampling_schema_version": "1.0",
+        "sampling_schema_version": "1.1",
         "manifest_id": "manifest-1",
         "platform": "bilibili",
         "video_id": "video-1",
@@ -41,6 +41,25 @@ def test_manifest_accepts_a_strict_versioned_payload() -> None:
     assert manifest.video_metrics.views == 5000
 
 
+def test_manifest_accepts_unknown_exact_duplicates_in_version_1_1() -> None:
+    manifest = SamplingManifest.model_validate(manifest_data(exact_duplicate_count=None))
+
+    assert manifest.exact_duplicate_count is None
+
+
+def test_manifest_accepts_known_exact_duplicates_in_legacy_version_1_0() -> None:
+    manifest = SamplingManifest.model_validate(manifest_data(sampling_schema_version="1.0"))
+
+    assert manifest.exact_duplicate_count == 1
+
+
+def test_manifest_rejects_unknown_exact_duplicates_in_legacy_version_1_0() -> None:
+    with pytest.raises(ValidationError, match="legacy_exact_duplicate_count_required"):
+        SamplingManifest.model_validate(
+            manifest_data(sampling_schema_version="1.0", exact_duplicate_count=None)
+        )
+
+
 def test_manifest_rejects_unknown_stratum_comment() -> None:
     with pytest.raises(ValidationError, match="stratum_comment_id_not_in_candidate_pool"):
         SamplingManifest.model_validate(
@@ -55,11 +74,10 @@ def test_manifest_rejects_unknown_stratum_comment() -> None:
         ({"author_id_present": 97}, "author_count_exceeds_collected_total"),
         ({"distinct_author_count": 91}, "distinct_author_count_exceeds_known_authors"),
         ({"exact_duplicate_count": 97}, "duplicate_count_exceeds_collected_total"),
+        ({"normalized_duplicate_count": 97}, "duplicate_count_exceeds_collected_total"),
     ],
 )
-def test_manifest_rejects_impossible_counts(
-    override: dict[str, object], message: str
-) -> None:
+def test_manifest_rejects_impossible_counts(override: dict[str, object], message: str) -> None:
     with pytest.raises(ValidationError, match=message):
         SamplingManifest.model_validate(manifest_data(**override))
 

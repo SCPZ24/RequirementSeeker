@@ -70,7 +70,7 @@ def request_with_c_ids() -> AnalysisRequest:
 def manifest_for(request: AnalysisRequest, *, usable: bool = True) -> SamplingManifest:
     ids = [comment.comment_id for comment in request.comments]
     return SamplingManifest(
-        sampling_schema_version="1.0",
+        sampling_schema_version="1.1",
         manifest_id="manifest-1",
         platform=request.video.platform,
         video_id=request.video.video_id,

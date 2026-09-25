@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -141,6 +142,76 @@ def test_collection_rejects_inverted_times() -> None:
 def test_collection_rejects_more_successes_than_requests() -> None:
     with pytest.raises(ValidationError, match="pages_succeeded_exceeds_requested"):
         CollectionRecord.model_validate(collection_data(pages_requested=1, pages_succeeded=2))
+
+
+def test_legacy_collection_has_unknown_duplicate_count() -> None:
+    collection = CollectionRecord.model_validate(collection_data())
+    assert (collection.collection_schema_version, collection.exact_duplicate_count) == (None, None)
+
+
+@pytest.mark.parametrize("count", [0, None])
+def test_collection_version_1_1_accepts_known_or_unknown_count(count: int | None) -> None:
+    collection = CollectionRecord.model_validate(
+        collection_data(collection_schema_version="1.1", exact_duplicate_count=count)
+    )
+    assert (collection.collection_schema_version, collection.exact_duplicate_count) == (
+        "1.1",
+        count,
+    )
+
+
+@pytest.mark.parametrize(
+    ("provenance", "expected"),
+    [
+        ({}, {}),
+        (
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+            {"collection_schema_version": "1.1", "exact_duplicate_count": None},
+        ),
+    ],
+)
+def test_collection_default_json_round_trips_provenance_presence(
+    provenance: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    collection = CollectionRecord.model_validate(collection_data(**provenance))
+
+    serialized = collection.model_dump_json()
+    saved = CollectionRecord.model_validate_json(serialized)
+
+    assert saved == collection
+    document = json.loads(serialized)
+    assert {key: document[key] for key in expected} == expected
+    assert ("collection_schema_version" in document) == ("collection_schema_version" in expected)
+    assert ("exact_duplicate_count" in document) == ("exact_duplicate_count" in expected)
+    assert ("collection_schema_version" in collection.model_dump()) == (
+        "collection_schema_version" in expected
+    )
+    assert ("exact_duplicate_count" in collection.model_dump()) == (
+        "exact_duplicate_count" in expected
+    )
+
+
+def test_collection_rejects_duplicate_count_without_version() -> None:
+    with pytest.raises(ValidationError, match="duplicate_count_without_version"):
+        CollectionRecord.model_validate(collection_data(exact_duplicate_count=0))
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"exact_duplicate_count": None},
+        {"collection_schema_version": "1.1"},
+        {"collection_schema_version": None, "exact_duplicate_count": None},
+    ],
+)
+def test_collection_requires_paired_version_and_count(fields: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError, match="duplicate_provenance_fields_invalid"):
+        CollectionRecord.model_validate(collection_data(**fields))
+
+
+def test_collection_rejects_unknown_version() -> None:
+    with pytest.raises(ValidationError):
+        CollectionRecord.model_validate(collection_data(collection_schema_version="1.2"))
 
 
 @pytest.mark.parametrize(

@@ -26,7 +26,7 @@ def main() -> None:
 
     comment_ids = [comment.comment_id for comment in request.comments]
     manifest = SamplingManifest(
-        sampling_schema_version="1.0",
+        sampling_schema_version="1.1",
         manifest_id="demo-manifest-1",
         platform=request.video.platform,
         video_id=request.video.video_id,

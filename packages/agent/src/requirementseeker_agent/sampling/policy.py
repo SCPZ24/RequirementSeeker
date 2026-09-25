@@ -12,7 +12,10 @@ SAMPLING_POLICY_VERSION = "m2.0"
 _STRATA: tuple[SamplingStratum, ...] = ("top", "recent", "replies", "long_tail")
 _REFILL_ORDER: tuple[SamplingStratum, ...] = ("long_tail", "recent", "top", "replies")
 _STRATUM_WEIGHTS: dict[SamplingStratum, float] = {
-    "top": 0.35, "recent": 0.25, "replies": 0.20, "long_tail": 0.20,
+    "top": 0.35,
+    "recent": 0.25,
+    "replies": 0.20,
+    "long_tail": 0.20,
 }
 _DIRECTION_FACTORS: dict[VideoDirection, float] = {
     "software_tool": 1.10,
@@ -38,7 +41,7 @@ class SamplingQuality:
     target_completion: float
     page_success_rate: float
     author_completeness: float
-    duplicate_rate: float
+    duplicate_rate: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,13 +66,20 @@ def assess_quality(manifest: SamplingManifest) -> SamplingQuality:
     completion = min(manifest.collected_total / max(manifest.collection_target, 1), 1.0)
     page_rate = manifest.pages_succeeded / max(manifest.pages_requested, 1)
     author_rate = manifest.author_id_present / max(manifest.collected_total, 1)
+    trusted = (
+        manifest.sampling_schema_version == "1.1" and manifest.exact_duplicate_count is not None
+    )
     duplicate_rate = (
-        manifest.exact_duplicate_count + manifest.normalized_duplicate_count
-    ) / max(manifest.collected_total, 1)
+        (manifest.exact_duplicate_count + manifest.normalized_duplicate_count)
+        / max(manifest.collected_total, 1)
+        if trusted and manifest.exact_duplicate_count is not None
+        else None
+    )
     if (
         completion >= 0.90
         and page_rate >= 0.90
         and author_rate >= 0.80
+        and duplicate_rate is not None
         and duplicate_rate <= 0.25
         and manifest.distinct_author_count >= 3
     ):
@@ -103,9 +113,7 @@ def _quotas(target: int) -> dict[SamplingStratum, int]:
     exact = {name: target * _STRATUM_WEIGHTS[name] for name in _STRATA}
     quotas = {name: floor(exact[name]) for name in _STRATA}
     remaining = target - sum(quotas.values())
-    order = sorted(
-        _STRATA, key=lambda name: (-(exact[name] - quotas[name]), _STRATA.index(name))
-    )
+    order = sorted(_STRATA, key=lambda name: (-(exact[name] - quotas[name]), _STRATA.index(name)))
     for name in order[:remaining]:
         quotas[name] += 1
     return quotas

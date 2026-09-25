@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import (
@@ -148,6 +148,21 @@ class CollectionError(Contract):
 
 
 class CollectionRecord(Contract):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "dependentRequired": {
+                "collection_schema_version": ["exact_duplicate_count"],
+                "exact_duplicate_count": ["collection_schema_version"],
+            },
+            "not": {
+                "properties": {"collection_schema_version": {"type": "null"}},
+                "required": ["collection_schema_version"],
+            },
+        }
+    )
+
+    collection_schema_version: Literal["1.1"] | None = None
+    exact_duplicate_count: NonNegativeInt | None = None
     reported_total: NonNegativeInt | None
     collected_total: NonNegativeInt
     pages_requested: NonNegativeInt
@@ -157,8 +172,33 @@ class CollectionRecord(Contract):
     collection_finished_at: Timestamp
     collection_errors: list[CollectionError]
 
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        data = super().model_dump(**kwargs)
+        if "collection_schema_version" not in self.model_fields_set:
+            data.pop("collection_schema_version", None)
+            data.pop("exact_duplicate_count", None)
+        return data
+
+    def model_dump_json(self, **kwargs: Any) -> str:
+        if "collection_schema_version" not in self.model_fields_set:
+            fields = {"collection_schema_version", "exact_duplicate_count"}
+            exclude = kwargs.get("exclude")
+            if isinstance(exclude, dict):
+                kwargs["exclude"] = {**exclude, **dict.fromkeys(fields, True)}
+            else:
+                kwargs["exclude"] = fields if exclude is None else set(exclude) | fields
+        return super().model_dump_json(**kwargs)
+
     @model_validator(mode="after")
     def integrity(self) -> Self:
+        if self.collection_schema_version is None and self.exact_duplicate_count is not None:
+            raise ValueError("duplicate_count_without_version")
+        version_present = "collection_schema_version" in self.model_fields_set
+        count_present = "exact_duplicate_count" in self.model_fields_set
+        if version_present != count_present or (
+            version_present and self.collection_schema_version is None
+        ):
+            raise ValueError("duplicate_provenance_fields_invalid")
         if self.pages_succeeded > self.pages_requested:
             raise ValueError("pages_succeeded_exceeds_requested")
         if self.collection_finished_at < self.collection_started_at:

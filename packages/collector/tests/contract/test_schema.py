@@ -95,10 +95,38 @@ def test_committed_schema_matches_generated_schema(kind: str) -> None:
     Draft202012Validator.check_schema(saved)
 
 
+def test_collection_serialization_schema_keeps_contract_fields() -> None:
+    schema = CollectionRecord.model_json_schema(mode="serialization")
+    assert schema["properties"] == export_schema("collection")["properties"]
+    assert schema["dependentRequired"] == export_schema("collection")["dependentRequired"]
+
+
 @pytest.mark.parametrize("kind", SCHEMA_MODELS)
 def test_valid_documents_pass_standard_json_schema(kind: str) -> None:
     schema = json.loads((ROOT / "schemas" / f"{kind}.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(VALID_DOCUMENTS[kind])
+
+
+@pytest.mark.parametrize(
+    ("fields", "valid"),
+    [
+        ({}, True),
+        ({"collection_schema_version": "1.1", "exact_duplicate_count": 0}, True),
+        ({"collection_schema_version": "1.1", "exact_duplicate_count": None}, True),
+        ({"exact_duplicate_count": None}, False),
+        ({"collection_schema_version": "1.1"}, False),
+        ({"collection_schema_version": None, "exact_duplicate_count": None}, False),
+    ],
+)
+def test_collection_schema_requires_paired_provenance_fields(
+    fields: dict[str, Any], valid: bool
+) -> None:
+    document = {**VALID_DOCUMENTS["collection"], **fields}
+    schema = json.loads((ROOT / "schemas" / "collection.schema.json").read_text(encoding="utf-8"))
+    errors = list(
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(document)
+    )
+    assert (not errors) is valid
 
 
 @pytest.mark.parametrize(

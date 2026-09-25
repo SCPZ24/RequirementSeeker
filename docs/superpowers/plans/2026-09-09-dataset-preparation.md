@@ -45,7 +45,7 @@
 - Create: `packages/dataset-tools/src/requirementseeker_dataset/contracts.py`
 - Create: `packages/dataset-tools/tests/test_contracts.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_sanitization_report_rejects_raw_identifiers() -> None:
@@ -62,13 +62,13 @@ def test_label_template_uses_explicit_unlabeled_values() -> None:
     assert item.normalized_need is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_contracts.py -q`
 
 Expected: package import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create an independent Hatchling project with only Pydantic runtime dependency. Define strict `SanitizedVideo`, `SanitizedComment`, `SamplingManifest`, `SanitizationReport`, `ReviewItem`, `DatasetSplit`, `CommentLabel`, `ClusterLabel`, `AnnotationFile`, and `AdjudicationFile`. Reuse field names from raw output, but their ID values must match `^(video|author|comment)_[0-9a-f]{32}$`. `SamplingManifest` mirrors the approved M2 1.0 file fields without importing Agent code.
 
@@ -116,13 +116,13 @@ class SamplingManifest(Contract):
 
 Copy M2's cross-field invariants into this file-contract model and test them: successful pages cannot exceed requested pages; distinct known authors and duplicate counts cannot exceed their totals; candidate IDs and per-stratum IDs are unique; strata keys equal `available_strata`; every stratum ID belongs to the candidate pool.
 
-- [ ] **Step 4: Run tests and quality checks**
+- [x] **Step 4: Run tests and quality checks**
 
-Run: `uv sync --project packages/dataset-tools && uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_contracts.py -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools mypy packages/dataset-tools/src`
+Run: `uv sync --project packages/dataset-tools && uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_contracts.py -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools mypy --config-file packages/dataset-tools/pyproject.toml packages/dataset-tools/src`
 
 Expected: contract tests pass; package has no dependency on collector or Agent.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools
@@ -137,7 +137,7 @@ git commit -m "feat(dataset): add sanitized and annotation contracts"
 - Create: `packages/dataset-tools/tests/fixtures/raw/invalid/`
 - Create: `packages/dataset-tools/tests/test_source.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_source_reads_exact_three_file_directory() -> None:
@@ -152,13 +152,13 @@ def test_invalid_raw_directory_is_rejected(case: str) -> None:
         read_raw_video(FIXTURES / "raw/invalid" / case)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_source.py -q`
 
 Expected: source reader import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Copy the approved raw JSON Schemas into test resources or define equivalent private input models; do not import `packages/collector`. Require exactly `video.json`, `comments.jsonl`, `collection.json`; validate extra fields, counts, unique IDs, parent self-reference, platform directory and filename encoding before returning immutable `RawVideoBundle`.
 
@@ -174,13 +174,13 @@ def read_raw_video(directory: Path) -> RawVideoBundle:
     return RawVideoBundle(video, comments, collection)
 ```
 
-- [ ] **Step 4: Run source tests**
+- [x] **Step 4: Run source tests**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_source.py -q`
 
 Expected: valid fixture loads; all invalid fixtures fail with specific safe codes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools/src/requirementseeker_dataset/source.py packages/dataset-tools/tests/fixtures packages/dataset-tools/tests/test_source.py
@@ -193,7 +193,7 @@ git commit -m "feat(dataset): validate raw collector inputs"
 - Create: `packages/dataset-tools/src/requirementseeker_dataset/identifiers.py`
 - Create: `packages/dataset-tools/tests/test_identifiers.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_hmac_is_stable_and_type_scoped() -> None:
@@ -210,18 +210,19 @@ def test_secret_is_not_in_repr_or_error() -> None:
 
 
 def test_short_secret_is_rejected_without_value() -> None:
+    marker = b"tiny-secret-value"
     with pytest.raises(SecretConfigurationError, match="dataset_secret_too_short") as error:
-        IdentifierPseudonymizer(b"short")
-    assert "short" not in str(error.value)
+        IdentifierPseudonymizer(marker)
+    assert marker.decode() not in str(error.value)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_identifiers.py -q`
 
 Expected: identifier module import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 class IdentifierPseudonymizer:
@@ -249,13 +250,13 @@ class IdentifierPseudonymizer:
 
 No function returns or writes a raw-to-pseudonymous mapping. Missing environment variable errors mention only the variable name.
 
-- [ ] **Step 4: Run identifier tests**
+- [x] **Step 4: Run identifier tests**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_identifiers.py -q`
 
 Expected: stable/type-scoped/security tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools/src/requirementseeker_dataset/identifiers.py packages/dataset-tools/tests/test_identifiers.py
@@ -268,7 +269,7 @@ git commit -m "feat(dataset): add stable scoped pseudonymous IDs"
 - Create: `packages/dataset-tools/src/requirementseeker_dataset/text.py`
 - Create: `packages/dataset-tools/tests/test_text.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 @pytest.mark.parametrize(
@@ -284,9 +285,9 @@ def test_semantic_content_and_internal_spaces_are_preserved() -> None:
     assert result.text == "我需要  一个离线工具\n第二行"
 
 
-def test_ambiguous_address_becomes_review_item_not_deleted() -> None:
+def test_precise_address_is_replaced_and_marked_for_review() -> None:
     result = sanitize_text("在幸福路 18 号见")
-    assert result.text
+    assert result.text == "[ADDRESS]见"
     assert result.review_reasons == ["possible_precise_address"]
 
 
@@ -295,15 +296,15 @@ def test_explicit_full_address_and_identity_number_are_replaced() -> None:
     assert result.text == "[ADDRESS]，身份证 [IDENTIFIER]"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_text.py -q`
 
 Expected: text module import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
-Normalize Unicode to NFC, convert CRLF/CR to LF and strip only outer whitespace. Apply ordered compiled patterns for email, mainland phone, mainland identity number, explicitly introduced private handles and addresses introduced by `地址：`. Replace with `[EMAIL]`, `[PHONE]`, `[IDENTIFIER]`, `[HANDLE]`, `[ADDRESS]`; record category replacement counts. Other address-like phrases add `possible_precise_address` review without erasing the text.
+Normalize Unicode to NFC, convert CRLF/CR to LF and strip only outer whitespace. Apply ordered compiled patterns for email, mainland phone, mainland identity number, explicitly introduced private handles and addresses introduced by `地址：`. Replace with `[EMAIL]`, `[PHONE]`, `[IDENTIFIER]`, `[HANDLE]`, `[ADDRESS]`; record category replacement counts. Street-and-number address candidates are also replaced with `[ADDRESS]` and add `possible_precise_address` for human review, so precise locations cannot enter sanitized or labeling files.
 
 ```python
 EMAIL_PATTERN = re.compile(r"(?i)(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?![\w.-])")
@@ -328,17 +329,19 @@ def sanitize_text(source: str) -> TextResult:
     for rule in RULES:
         text, count = rule.pattern.subn(rule.replacement, text)
         counts[rule.name] += count
-    reviews = ["possible_precise_address"] if PRECISE_ADDRESS_CANDIDATE.search(text) else []
+    text, precise_address_count = PRECISE_ADDRESS_CANDIDATE.subn("[ADDRESS]", text)
+    counts["address"] += precise_address_count
+    reviews = ["possible_precise_address"] if precise_address_count else []
     return TextResult(text, dict(counts), reviews)
 ```
 
-- [ ] **Step 4: Run text tests**
+- [x] **Step 4: Run text tests**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_text.py -q`
 
 Expected: replacements, preservation and conservative review tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools/src/requirementseeker_dataset/text.py packages/dataset-tools/tests/test_text.py
@@ -353,7 +356,7 @@ git commit -m "feat(dataset): redact direct identifiers deterministically"
 - Create: `packages/dataset-tools/tests/test_sanitize.py`
 - Create: `packages/dataset-tools/tests/test_split.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_sanitize_writes_no_raw_ids_or_secret(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -370,7 +373,7 @@ def test_sanitize_emits_m2_sampling_manifest(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setenv("RS_DATASET_TEST_SECRET", "local-test-secret-at-least-32-bytes")
     result = sanitize_root(RAW_FIXTURE, PLAN_FIXTURE, tmp_path, "RS_DATASET_TEST_SECRET")
     manifest = SamplingManifest.model_validate_json(result.sampling_manifests[0].read_text("utf-8"))
-    assert manifest.direction == "software_tools"
+    assert manifest.direction == "software_tool"
     assert manifest.video_id.startswith("video_")
     assert all(item.startswith("comment_") for values in manifest.stratum_comment_ids.values() for item in values)
 
@@ -381,13 +384,13 @@ def test_24_videos_split_10_7_7_and_keep_replies_together() -> None:
     assert len(set(split.development + split.calibration + split.holdout)) == 24
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_sanitize.py packages/dataset-tools/tests/test_split.py -q`
 
 Expected: sanitize and split imports fail.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Read exactly the raw video bundles named by the approved collection plan, pseudonymize video/author/comment/parent IDs, sanitize title/description/comment text, preserve nullable metrics and collection metadata, and write the equivalent directory plus `sanitization.json` and `sampling-manifest.json`. Do not process other directories found beside approved inputs; report only their count. Hash canonical input/output JSON with SHA-256; reports contain only pseudonymous IDs, counts, rule version, hashes and review reasons. Derive the target from the approved collection formula, author counts from sanitized comments, normalized duplicates as the sum of all repeated normalized-text occurrences beyond the first, exact duplicates from `exact_duplicate_merged` collection errors, and stratum IDs from each comment's accepted source. Set SamplingManifest `collected_total` to unique comment count plus exact duplicate occurrences, matching M2's pre-ID-dedup meaning. Translate `software_tools -> software_tool` and `life_services -> life_service`; reject unknown mappings.
 
@@ -403,13 +406,13 @@ def stable_split(video_ids: Sequence[str]) -> DatasetSplit:
 
 Use sibling staging and backup directories with the same restore behavior as the collector, implemented independently. Reject an approved video whose raw directory is missing or has a mismatched platform/video key. A video with zero comments or zero successful pages writes a sanitization exclusion report, emits no SamplingManifest, and is added to the replacement-candidate report. Never modify raw files.
 
-- [ ] **Step 4: Run pipeline tests and checks**
+- [x] **Step 4: Run pipeline tests and checks**
 
-Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_sanitize.py packages/dataset-tools/tests/test_split.py -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools mypy packages/dataset-tools/src`
+Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_sanitize.py packages/dataset-tools/tests/test_split.py -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools mypy --config-file packages/dataset-tools/pyproject.toml packages/dataset-tools/src`
 
 Expected: raw IDs/secrets are absent and stable split passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools/src/requirementseeker_dataset/sanitize.py packages/dataset-tools/src/requirementseeker_dataset/split.py packages/dataset-tools/tests/test_sanitize.py packages/dataset-tools/tests/test_split.py
@@ -422,7 +425,7 @@ git commit -m "feat(dataset): sanitize and split collected videos"
 - Create: `packages/dataset-tools/src/requirementseeker_dataset/labels.py`
 - Create: `packages/dataset-tools/tests/test_labels.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_export_contains_no_semantic_prefill(tmp_path: Path) -> None:
@@ -442,15 +445,15 @@ def test_dispute_requires_two_independent_annotations_and_adjudication() -> None
     assert validate_labels(adjudicated_dispute()).evaluation_eligible is True
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_labels.py -q`
 
 Expected: labels module import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
-`export_labels` reads only sanitized IDs/text and the matching `sampling-manifest.json`, then emits one annotation file per video with explicit `unlabeled` fields and an empty cluster list. `validate_labels` rejects unknown enum values through Pydantic, raw-ID patterns, duplicate comments, cluster members outside the file video, duplicate cluster membership, incomplete required fields, and disputed records without two distinct annotator IDs plus an adjudicator decision.
+`export_labels` reads only sanitized IDs/text and the matching `sampling-manifest.json`, then emits one annotation file per video with the sanitized comment text, explicit `unlabeled` fields and an empty cluster list. The text is required so a human can actually perform the annotation; no raw field or model-generated semantic conclusion is added. `validate_labels` rejects unknown enum values through Pydantic, raw-ID patterns, duplicate comments, cluster members outside the file video, duplicate cluster membership, incomplete required fields, and disputed records without two distinct annotator IDs plus an adjudicator decision.
 
 ```python
 def validate_cluster(annotation: AnnotationFile, cluster: ClusterLabel) -> None:
@@ -467,13 +470,13 @@ def evaluation_eligible(annotation: AnnotationFile, adjudication: AdjudicationFi
     return adjudication is not None and len(set(adjudication.annotator_ids)) == 2 and adjudication.decision is not None
 ```
 
-- [ ] **Step 4: Run label tests**
+- [x] **Step 4: Run label tests**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_labels.py -q`
 
 Expected: blank export and closed validation tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools/src/requirementseeker_dataset/labels.py packages/dataset-tools/tests/test_labels.py
@@ -490,7 +493,7 @@ git commit -m "feat(dataset): export and validate human labels"
 - Local only: `.local-data/m2-real/labels/`
 - Local only: `docs/execution/2026-09-09.md`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_cli_reads_secret_by_environment_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -502,41 +505,41 @@ def test_cli_reads_secret_by_environment_name(tmp_path: Path, monkeypatch: pytes
 
 def test_cli_never_accepts_secret_value_argument(parser: ArgumentParser) -> None:
     help_text = parser.format_help()
-    assert "--secret" not in help_text
+    assert "--secret " not in help_text
     assert "--secret-env" in help_text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests/test_cli.py -q`
 
 Expected: CLI import fails.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add the exact three commands from the approved spec. All commands emit ASCII summary JSON containing paths, counts, versions and safe error codes only. README documents environment-variable setup without sample secret values, local-only outputs, manual review, split semantics and the prohibition on automatic gold labels.
 
-- [ ] **Step 4: Run the complete package gate**
+- [x] **Step 4: Run the complete package gate**
 
-Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools ruff format --check packages/dataset-tools && uv run --project packages/dataset-tools mypy packages/dataset-tools/src && uv lock --project packages/dataset-tools --check && uv build --project packages/dataset-tools && git diff --check`
+Run: `uv run --project packages/dataset-tools pytest packages/dataset-tools/tests -q && uv run --project packages/dataset-tools ruff check packages/dataset-tools && uv run --project packages/dataset-tools ruff format --check packages/dataset-tools && uv run --project packages/dataset-tools mypy --config-file packages/dataset-tools/pyproject.toml packages/dataset-tools/src && uv lock --project packages/dataset-tools --check && uv build --project packages/dataset-tools && git diff --check`
 
 Expected: all tests, lint, format, types, lock and build pass; package imports neither collector nor Agent.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/dataset-tools
 git commit -m "feat(dataset): expose safe preparation CLI"
 ```
 
-- [ ] **Step 6: Run the tool on the two approved local pilot directories**
+- [x] **Step 6: Run the tool on the two approved local pilot directories**
 
 Set the dataset secret only in the current process environment, run `sanitize`, then `export-labels`. Do not print the environment value. Open sanitized `video.json`, `comments.jsonl`, `sanitization.json` and label template in visible VS Code.
 
-- [ ] **Step 7: Record the pilot result**
+- [x] **Step 7: Record the pilot result**
 
 Write counts, replacement categories, review-item counts, split assignment, failures and next action to `docs/execution/2026-09-09.md`; do not include raw IDs, raw text or the secret.
 
-- [ ] **Step 8: Run the approved 24-video batch**
+- [x] **Step 8: Run the approved 24-video batch**
 
 After both platform pilots and the complete package gate pass, run `sanitize` and `export-labels` on the exact 24-entry approved manifest. Verify 24 sanitized directories, a stable 10/7/7 split, 5,090 input comment records accounted for, no raw IDs or secret values in output, and an explicit `unlabeled` annotation template for every sanitized comment. Record only aggregate counts, review categories, safe failure codes and output hashes in the local execution log.

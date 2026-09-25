@@ -39,7 +39,7 @@ class VideoMetrics(Contract):
 class SamplingManifest(Contract):
     """描述单个视频候选评论池的采集结果及其可审计来源。"""
 
-    sampling_schema_version: Literal["1.0"]
+    sampling_schema_version: Literal["1.0", "1.1"]
     manifest_id: Identifier
     platform: Platform
     video_id: Identifier
@@ -53,7 +53,7 @@ class SamplingManifest(Contract):
     direction: VideoDirection
     author_id_present: NonNegativeInt
     distinct_author_count: NonNegativeInt
-    exact_duplicate_count: NonNegativeInt
+    exact_duplicate_count: NonNegativeInt | None
     normalized_duplicate_count: NonNegativeInt
     video_metrics: VideoMetrics | None
     candidate_comment_ids: list[Identifier]
@@ -70,7 +70,9 @@ class SamplingManifest(Contract):
             raise ValueError("author_count_exceeds_collected_total")
         if self.distinct_author_count > self.author_id_present:
             raise ValueError("distinct_author_count_exceeds_known_authors")
-        duplicate_count = self.exact_duplicate_count + self.normalized_duplicate_count
+        if self.sampling_schema_version == "1.0" and self.exact_duplicate_count is None:
+            raise ValueError("legacy_exact_duplicate_count_required")
+        duplicate_count = (self.exact_duplicate_count or 0) + self.normalized_duplicate_count
         if duplicate_count > self.collected_total:
             raise ValueError("duplicate_count_exceeds_collected_total")
         if len(self.candidate_comment_ids) != len(set(self.candidate_comment_ids)):
