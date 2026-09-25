@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = commands.add_parser("validate-labels", help="validate labels and adjudications")
     validate.add_argument("label_root", type=Path)
+    validate.add_argument("--sanitized", type=Path, required=True)
     return parser
 
 
@@ -65,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             )
         else:
-            validation = validate_label_root(args.label_root)
+            validation = validate_label_root(args.label_root, args.sanitized)
             _emit(
                 {
                     "annotation_count": validation.annotation_count,

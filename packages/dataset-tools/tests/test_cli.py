@@ -91,11 +91,16 @@ def test_cli_exports_and_validates_blank_templates(
     assert export_summary["annotation_count"] == 1
     assert export_summary["comment_count"] == 2
 
-    assert main(["validate-labels", str(labels)]) == 0
+    assert main(["validate-labels", str(labels), "--sanitized", str(sanitized)]) == 0
     validation_summary = json.loads(capsys.readouterr().out)
     assert validation_summary["annotation_count"] == 1
     assert validation_summary["evaluation_eligible_count"] == 0
     assert validation_summary["status"] == "ok"
+
+    with pytest.raises(SystemExit) as error:
+        main(["validate-labels", str(labels)])
+    assert error.value.code == 2
+    assert capsys.readouterr().out == ""
 
 
 def test_cli_reports_only_safe_error_code(
@@ -105,7 +110,7 @@ def test_cli_reports_only_safe_error_code(
     invalid = tmp_path / marker
     invalid.mkdir()
 
-    assert main(["validate-labels", str(invalid)]) == 2
+    assert main(["validate-labels", str(invalid), "--sanitized", str(tmp_path / "source")]) == 2
     output = capsys.readouterr().out
     assert marker not in output
     assert json.loads(output) == {"error": "annotation_files_missing", "status": "error"}

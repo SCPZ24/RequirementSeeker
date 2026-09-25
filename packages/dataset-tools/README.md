@@ -17,7 +17,7 @@
 ```text
 rs-dataset sanitize --raw <raw-root> --plan <manifest.json> --output <sanitized-root> --secret-env <name>
 rs-dataset export-labels --sanitized <sanitized-root> --output <label-root>
-rs-dataset validate-labels <label-root>
+rs-dataset validate-labels <label-root> --sanitized <sanitized-root>
 ```
 
 所有命令只向标准输出写一行 ASCII JSON 摘要。失败摘要只包含固定错误码，不回显原始评论、原始 ID 或秘密值。
@@ -30,4 +30,4 @@ rs-dataset validate-labels <label-root>
 
 无争议样本只使用 `annotation.json`。争议样本在同目录增加第二位标注者的 `annotation-secondary.json` 和裁决者的 `adjudication.json`。两位标注者必须不同，三份文件必须引用完全相同的脱敏评论集合；最终裁决不得继续标记为争议。
 
-`validate-labels` 会报告标注文件数量和可进入评测的数量。空白模板可以通过结构校验，但可评测数量为零。未知枚举、重复评论、跨视频簇成员、重复簇成员、疑似原始 ID、虚假的完成状态或不完整争议裁决都会被拒绝。
+`validate-labels` 会按对应的脱敏目录核对视频集合、评论 ID 顺序和脱敏正文，再报告标注文件数量和可进入评测的数量。空白模板可以通过结构校验，但可评测数量为零。未知枚举、重复评论、跨视频簇成员、重复簇成员、疑似原始 ID、虚假的完成状态或不完整争议裁决都会被拒绝。单份标注的 Python 结构校验不能单独授予可评测资格。

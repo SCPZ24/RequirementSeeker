@@ -205,7 +205,7 @@ def _validate_structure(annotation: AnnotationFile) -> None:
 
 
 def _fields_complete(annotation: AnnotationFile) -> bool:
-    if annotation.annotator_id is None:
+    if annotation.annotator_id is None or not annotation.comments:
         return False
     for item in annotation.comments:
         if (
@@ -237,7 +237,7 @@ def validate_labels(
     if annotation.is_complete and not _fields_complete(annotation):
         raise LabelValidationError("incomplete_required_fields")
     if not annotation.disputed:
-        return LabelValidationResult(evaluation_eligible=annotation.is_complete)
+        return LabelValidationResult(evaluation_eligible=False)
     if second is None or adjudication is None or adjudication.decision is None:
         raise LabelValidationError("dispute_not_adjudicated")
 
@@ -270,7 +270,7 @@ def validate_labels(
         raise LabelValidationError("adjudication_decision_source_mismatch")
     if _RAW_IDENTIFIER.match(adjudication.adjudicator_id):
         raise LabelValidationError("raw_identifier_pattern")
-    return LabelValidationResult(evaluation_eligible=True)
+    return LabelValidationResult(evaluation_eligible=False)
 
 
 def _read_annotation(path: Path) -> AnnotationFile:
@@ -287,29 +287,102 @@ def _read_adjudication(path: Path) -> AdjudicationFile:
         raise LabelValidationError("adjudication_file_invalid") from None
 
 
-def validate_label_root(label_root: Path) -> LabelRootValidationResult:
-    """验证目录中的主标注，以及同目录下可选的第二标注和裁决文件。"""
+def _require_local_path(path: Path, root: Path) -> None:
+    if not path.is_relative_to(root):
+        raise LabelValidationError("label_path_invalid")
+    for part in (path, *path.parents):
+        if _is_path_redirect(part):
+            raise LabelValidationError("label_path_invalid")
 
+
+def _require_local_tree(root: Path) -> None:
+    _require_local_path(root, root)
+    for path in root.rglob("*"):
+        _require_local_path(path, root)
+
+
+def _sanitized_sources(sanitized_root: Path) -> dict[tuple[str, str], list[tuple[str, str]]]:
+    if not sanitized_root.is_dir() or _is_path_redirect(sanitized_root):
+        raise LabelValidationError("label_path_invalid")
+    _require_local_tree(sanitized_root)
+    manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
+    if not manifests:
+        raise LabelValidationError("sampling_manifest_missing")
+    sources: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for path in manifests:
+        _require_local_path(path, sanitized_root)
+        manifest = _read_sampling_manifest(path)
+        key = (manifest.platform, manifest.video_id)
+        if (
+            path.relative_to(sanitized_root).parts
+            != (
+                manifest.platform,
+                manifest.video_id,
+                "sampling-manifest.json",
+            )
+            or key in sources
+        ):
+            raise LabelValidationError("label_source_set_mismatch")
+        comments_path = path.with_name("comments.jsonl")
+        _require_local_path(comments_path, sanitized_root)
+        comments = _read_comments(comments_path)
+        if not comments:
+            raise LabelValidationError("label_source_empty")
+        comment_ids = [item.comment_id for item in comments]
+        if (
+            len(comment_ids) != len(set(comment_ids))
+            or comment_ids != manifest.candidate_comment_ids
+        ):
+            raise LabelValidationError("label_source_comment_mismatch")
+        sources[key] = [(item.comment_id, item.text) for item in comments]
+    return sources
+
+
+def validate_label_root(label_root: Path, sanitized_root: Path) -> LabelRootValidationResult:
+    """仅在标注与对应脱敏来源一致时统计可评测数量。"""
+
+    if not label_root.is_dir() or _is_path_redirect(label_root):
+        raise LabelValidationError("label_path_invalid")
+    _require_local_tree(label_root)
     annotation_paths = sorted(label_root.rglob("annotation.json"))
     if not annotation_paths:
         raise LabelValidationError("annotation_files_missing")
+    sources = _sanitized_sources(sanitized_root)
+    paths: dict[tuple[str, str], Path] = {}
+    for path in annotation_paths:
+        _require_local_path(path, label_root)
+        relative = path.relative_to(label_root).parts
+        if len(relative) != 3 or relative[2] != "annotation.json":
+            raise LabelValidationError("label_source_set_mismatch")
+        key = (relative[0], relative[1])
+        if key in paths:
+            raise LabelValidationError("label_source_set_mismatch")
+        paths[key] = path
+    if paths.keys() != sources.keys():
+        raise LabelValidationError("label_source_set_mismatch")
     seen_videos: set[str] = set()
     eligible = 0
-    for path in annotation_paths:
+    for key, path in paths.items():
         annotation = _read_annotation(path)
+        if annotation.video_id != key[1]:
+            raise LabelValidationError("label_source_set_mismatch")
         if annotation.video_id in seen_videos:
             raise LabelValidationError("duplicate_annotation_video")
         seen_videos.add(annotation.video_id)
         second_path = path.with_name("annotation-secondary.json")
         adjudication_path = path.with_name("adjudication.json")
+        _require_local_path(second_path, label_root)
+        _require_local_path(adjudication_path, label_root)
         second = _read_annotation(second_path) if second_path.is_file() else None
         adjudication = (
             _read_adjudication(adjudication_path) if adjudication_path.is_file() else None
         )
         if not annotation.disputed and (second is not None or adjudication is not None):
             raise LabelValidationError("unexpected_dispute_files")
-        result = validate_labels(annotation, second=second, adjudication=adjudication)
-        eligible += result.evaluation_eligible
+        validate_labels(annotation, second=second, adjudication=adjudication)
+        if [(item.comment_id, item.text) for item in annotation.comments] != sources[key]:
+            raise LabelValidationError("label_source_comment_mismatch")
+        eligible += annotation.is_complete
     return LabelRootValidationResult(
         annotation_count=len(annotation_paths),
         evaluation_eligible_count=eligible,
