@@ -12,7 +12,10 @@ SAMPLING_POLICY_VERSION = "m2.0"
 _STRATA: tuple[SamplingStratum, ...] = ("top", "recent", "replies", "long_tail")
 _REFILL_ORDER: tuple[SamplingStratum, ...] = ("long_tail", "recent", "top", "replies")
 _STRATUM_WEIGHTS: dict[SamplingStratum, float] = {
-    "top": 0.35, "recent": 0.25, "replies": 0.20, "long_tail": 0.20,
+    "top": 0.35,
+    "recent": 0.25,
+    "replies": 0.20,
+    "long_tail": 0.20,
 }
 _DIRECTION_FACTORS: dict[VideoDirection, float] = {
     "software_tool": 1.10,
@@ -110,9 +113,7 @@ def _quotas(target: int) -> dict[SamplingStratum, int]:
     exact = {name: target * _STRATUM_WEIGHTS[name] for name in _STRATA}
     quotas = {name: floor(exact[name]) for name in _STRATA}
     remaining = target - sum(quotas.values())
-    order = sorted(
-        _STRATA, key=lambda name: (-(exact[name] - quotas[name]), _STRATA.index(name))
-    )
+    order = sorted(_STRATA, key=lambda name: (-(exact[name] - quotas[name]), _STRATA.index(name)))
     for name in order[:remaining]:
         quotas[name] += 1
     return quotas

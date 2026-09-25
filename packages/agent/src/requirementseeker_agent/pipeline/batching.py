@@ -155,9 +155,7 @@ class BatchPlanner:
         for item in sorted(comments, key=lambda value: value.comment_id):
             item_tokens = estimate_comment_tokens(item)
             if self._fixed_tokens + item_tokens > per_batch_limit:
-                raise BatchPlanningError(
-                    "input_tokens", "comment_exceeds_per_call_input_limit"
-                )
+                raise BatchPlanningError("input_tokens", "comment_exceeds_per_call_input_limit")
             if current_ids and current_tokens + item_tokens > per_batch_limit:
                 close_batch()
             current_ids.append(item.comment_id)

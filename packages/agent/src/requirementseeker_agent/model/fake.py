@@ -25,21 +25,15 @@ _ERRORS: dict[str, tuple[GatewayErrorCode, bool]] = {
 
 # 这里故意保留多种非法载荷，用于验证真实模型接入前后的防线一致。
 _PAYLOADS: dict[str, object] = {
-    "valid_signals": {
-        "signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]
-    },
-    "usage_missing": {
-        "signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]
-    },
+    "valid_signals": {"signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]},
+    "usage_missing": {"signals": [{"comment_id": "c1", "kind": "need", "summary": "批量导出"}]},
     "no_signal": {"signals": []},
     "disputed_signal": {
         "signals": [
             {"comment_id": "c1", "kind": "need", "summary": "可能需要批量导出", "disputed": True}
         ]
     },
-    "valid_clusters": {
-        "clusters": [{"comment_ids": ["c1", "c2", "c3"], "summary": "批量导出"}]
-    },
+    "valid_clusters": {"clusters": [{"comment_ids": ["c1", "c2", "c3"], "summary": "批量导出"}]},
     "bad_json": "{",
     "missing_fields": {"signals": [{"comment_id": "c1"}]},
     "extra_fields": {"signals": [], "unexpected": True},

@@ -106,9 +106,7 @@ class InMemorySemanticCache:
             return None, CacheEvent(key.digest, stage, "miss", None, now)
         if now >= entry.expires_at:
             del self._entries[key]
-            return None, CacheEvent(
-                key.digest, stage, "expired", entry.value.result_hash, now
-            )
+            return None, CacheEvent(key.digest, stage, "expired", entry.value.result_hash, now)
         # 读取也返回深副本，缓存中的可信基线不会被消费者修改。
         return entry.value.model_copy(deep=True), CacheEvent(
             key.digest, stage, "hit", entry.value.result_hash, now
