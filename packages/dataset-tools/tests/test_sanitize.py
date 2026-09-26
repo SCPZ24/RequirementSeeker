@@ -278,7 +278,9 @@ def test_create_only_preserves_target_created_during_generation(
         sanitize_root(raw, PLAN_FIXTURE, output, "RS_DATASET_TEST_SECRET", create_only=True)
 
     assert (output / "sentinel.txt").read_text(encoding="utf-8") == "keep"
-    assert not list(tmp_path.glob(".sanitized.staging.*"))
+    retained = list(tmp_path.glob(".sanitized.staging.*"))
+    assert len(retained) == 1
+    assert (retained[0] / "sanitization-summary.json").is_file()
     assert not output.with_name(".sanitized.backup").exists()
 
 

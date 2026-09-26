@@ -466,7 +466,7 @@ def sanitize_root(
         )
         _commit_generation(staging, output_root, backup, create_only=create_only)
     except Exception:
-        if staging.exists() and not staging.is_symlink():
+        if not create_only and staging.exists() and not staging.is_symlink():
             shutil.rmtree(staging, ignore_errors=True)
         raise
 
