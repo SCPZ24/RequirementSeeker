@@ -1,6 +1,7 @@
 """将批准的 Collector 原始目录原子转换为可交接的脱敏数据集。"""
 
 import json
+import os
 import shutil
 from collections import Counter
 from dataclasses import dataclass
@@ -349,9 +350,19 @@ def _count_unapproved_directories(raw_root: Path, plan: _ApprovedPlan) -> int:
     return count
 
 
-def _commit_generation(staging: Path, target: Path, backup: Path) -> None:
+def _commit_generation(
+    staging: Path, target: Path, backup: Path, *, create_only: bool = False
+) -> None:
     if staging.is_symlink() or target.is_symlink() or backup.exists() or backup.is_symlink():
         raise SanitizationError("output_commit_path_invalid")
+    if create_only:
+        if os.name != "nt":
+            raise SanitizationError("create_only_unsupported_platform")
+        try:
+            staging.rename(target)
+        except OSError:
+            raise SanitizationError("output_commit_failed") from None
+        return
     moved_old = False
     try:
         if target.exists():
@@ -377,9 +388,13 @@ def sanitize_root(
     approved_plan: Path,
     output_root: Path,
     secret_environment_name: str,
+    *,
+    create_only: bool = False,
 ) -> SanitizationResult:
     """只处理批准白名单，并以一个目录事务发布完整脱敏结果。"""
 
+    if create_only and os.name != "nt":
+        raise SanitizationError("create_only_unsupported_platform")
     plan = _read_plan(approved_plan)
     pseudonymizer = IdentifierPseudonymizer.from_environment(secret_environment_name)
     try:
@@ -399,6 +414,8 @@ def sanitize_root(
     staging = output_root.with_name(f".{output_root.name}.staging.{uuid4().hex}")
     backup = output_root.with_name(f".{output_root.name}.backup")
     if _is_path_redirect(output_root) or _is_path_redirect(backup):
+        raise SanitizationError("output_transaction_already_exists")
+    if create_only and (output_root.exists() or backup.exists()):
         raise SanitizationError("output_transaction_already_exists")
     if backup.exists() and not output_root.exists():
         if not backup.is_dir():
@@ -447,9 +464,9 @@ def sanitize_root(
                 "replacement_candidate_count": len(replacements),
             },
         )
-        _commit_generation(staging, output_root, backup)
+        _commit_generation(staging, output_root, backup, create_only=create_only)
     except Exception:
-        if staging.exists() and not staging.is_symlink():
+        if not create_only and staging.exists() and not staging.is_symlink():
             shutil.rmtree(staging, ignore_errors=True)
         raise
 

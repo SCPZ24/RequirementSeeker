@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from argparse import ArgumentParser
 from pathlib import Path
@@ -38,6 +39,37 @@ def test_cli_reads_secret_by_environment_name(
     assert result == 0
     assert SECRET not in output
     assert json.loads(output)["sampling_manifest_count"] == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="create-only publishing requires Windows")
+def test_cli_create_only_publishes_to_absent_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    raw = tmp_path / "raw"
+    shutil.copytree(FIXTURES / "raw" / "valid", raw)
+    monkeypatch.setenv("RS_DATASET_TEST_SECRET", SECRET)
+    output = tmp_path / "sanitized"
+
+    result = main(
+        [
+            "sanitize",
+            "--raw",
+            str(raw),
+            "--plan",
+            str(FIXTURES / "approved-manifest.json"),
+            "--output",
+            str(output),
+            "--secret-env",
+            "RS_DATASET_TEST_SECRET",
+            "--create-only",
+        ]
+    )
+
+    assert result == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "ok"
+    assert output.is_dir()
 
 
 def _all_options(parser: ArgumentParser) -> set[str]:

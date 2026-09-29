@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     sanitize.add_argument("--plan", type=Path, required=True)
     sanitize.add_argument("--output", type=Path, required=True)
     sanitize.add_argument("--secret-env", required=True, metavar="NAME")
+    sanitize.add_argument("--create-only", action="store_true")
 
     export = commands.add_parser("export-labels", help="create blank human label files")
     export.add_argument("--sanitized", type=Path, required=True)
@@ -44,7 +45,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "sanitize":
-            sanitization = sanitize_root(args.raw, args.plan, args.output, args.secret_env)
+            sanitization = sanitize_root(
+                args.raw, args.plan, args.output, args.secret_env, create_only=args.create_only
+            )
             _emit(
                 {
                     "excluded_raw_directory_count": sanitization.excluded_raw_directory_count,
