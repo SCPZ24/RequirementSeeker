@@ -35,6 +35,20 @@ class ModelCapabilities(Contract):
     max_input_tokens_per_call: PositiveInt
 
 
+class ModelRuntimeIdentity(Contract):
+    """gateway 在付费调用前可提供的非秘密模型身份。"""
+
+    model_name: Identifier
+    model_revision: Identifier | None
+
+
+class FrozenModelIdentity(Contract):
+    """通过真实评测准入核对后的不可空模型身份。"""
+
+    model_name: Identifier
+    model_revision: Identifier
+
+
 class ControlledContentBlock(Contract):
     """标记提示词、外部不可信数据和修复指令之间的信任边界。"""
 
@@ -89,3 +103,10 @@ class ModelGateway(Protocol):
     def capabilities(self) -> ModelCapabilities: ...
 
     def invoke(self, request: ModelCallRequest) -> ModelCallResponse: ...
+
+
+class VersionedModelGateway(ModelGateway, Protocol):
+    """真实评测要求的可核验 gateway 端口。"""
+
+    @property
+    def identity(self) -> ModelRuntimeIdentity: ...
