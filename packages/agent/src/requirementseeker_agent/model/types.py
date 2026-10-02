@@ -2,7 +2,7 @@
 
 from typing import Literal, Protocol
 
-from pydantic import Field, StrictBool
+from pydantic import ConfigDict, Field, StrictBool
 
 from ..contracts.analysis import TokenUsage
 from ..contracts.common import (
@@ -46,6 +46,8 @@ class ModelRuntimeIdentity(Contract):
 
 class FrozenModelIdentity(Contract):
     """通过真实评测准入核对后的不可空模型身份。"""
+
+    model_config = ConfigDict(frozen=True)
 
     model_name: Identifier
     model_revision: Identifier

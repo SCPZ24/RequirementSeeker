@@ -17,7 +17,12 @@ from ..contracts.analysis import (
 )
 from ..contracts.common import Contract, Identifier, Text
 from ..contracts.requests import AnalysisRequest
-from ..model.types import ControlledContentBlock, ModelCallRequest, ModelGateway
+from ..model.types import (
+    ControlledContentBlock,
+    FrozenModelIdentity,
+    ModelCallRequest,
+    ModelGateway,
+)
 from ..rules import evaluate_consensus
 from ..runtime.budget import BudgetLedger
 from .batching import (
@@ -290,6 +295,7 @@ def _invoke_batch(
     timeout_seconds: int,
     scenario_id: str | None,
     prior_audits: tuple[ModelInvocationAudit, ...],
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> tuple[tuple[NeedCluster, ...], tuple[ModelInvocationAudit, ...], int]:
     call, estimated_input_tokens = _call_request(
         request,
@@ -300,6 +306,13 @@ def _invoke_batch(
         timeout_seconds=timeout_seconds,
         scenario_id=scenario_id,
     )
+    if frozen_identity is not None:
+        call = call.model_copy(
+            update={
+                "model_name": frozen_identity.model_name,
+                "model_revision": frozen_identity.model_revision,
+            }
+        )
     audits: tuple[ModelInvocationAudit, ...] = ()
     next_attempt = 1
     planned_input_tokens = 0
@@ -330,6 +343,7 @@ def _invoke_batch(
                 input_tokens=estimated_input_tokens,
                 start_attempt=next_attempt,
                 cancellation_probe=cancellation_probe,
+                frozen_identity=frozen_identity,
             )
         except (InvocationFailure, InvocationCancelled, InvocationBudgetExceeded) as error:
             raise _prepend_audits(error, prior_audits + audits) from error
@@ -360,6 +374,7 @@ def cluster_signals(
     cancellation_probe: CancellationProbe = lambda: False,
     timeout_seconds: int = 30,
     scenario_id: str | None = None,
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> ClusterResult:
     """合并同视频可信信号，最多修复一次，并以 M1 规则复核结果。"""
 
@@ -402,6 +417,7 @@ def cluster_signals(
                 timeout_seconds=timeout_seconds,
                 scenario_id=scenario_id,
                 prior_audits=audits,
+                frozen_identity=frozen_identity,
             )
             audits += batch_audits
             planned_input_tokens += input_tokens

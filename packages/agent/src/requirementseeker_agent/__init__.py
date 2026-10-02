@@ -16,8 +16,14 @@ from .contracts import (
     SamplingManifest,
     TokenUsage,
 )
-from .model import ScenarioModelGateway
-from .pipeline import M2AnalysisResult, analyze_m2
+from .model import FrozenModelIdentity, ScenarioModelGateway
+from .pipeline import (
+    M2AnalysisResult,
+    RealEvaluationPreflightError,
+    analyze_m2,
+    analyze_m2_real_evaluation,
+    preflight_real_evaluation,
+)
 from .rules import RULES_VERSION, evaluate_consensus
 from .sampling import SAMPLING_POLICY_VERSION, SamplingPlan
 
@@ -40,5 +46,9 @@ __all__ = [
     "M2AnalysisResult",
     "TokenUsage",
     "analyze_m2",
+    "analyze_m2_real_evaluation",
+    "FrozenModelIdentity",
+    "RealEvaluationPreflightError",
+    "preflight_real_evaluation",
     "evaluate_consensus",
 ]

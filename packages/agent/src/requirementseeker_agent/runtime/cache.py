@@ -21,6 +21,7 @@ class CacheKeyParts(Contract):
     prompt_version: Identifier
     schema_version: Identifier
     model_config_ref: Identifier
+    model_name: Identifier | None = None
     model_revision: Identifier | None
 
 

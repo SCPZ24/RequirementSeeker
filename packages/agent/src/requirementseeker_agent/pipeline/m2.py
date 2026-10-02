@@ -13,7 +13,7 @@ from ..contracts.analysis import (
 )
 from ..contracts.requests import AnalysisRequest
 from ..contracts.sampling import SamplingManifest
-from ..model import GatewayStage, ModelGateway
+from ..model import FrozenModelIdentity, GatewayStage, ModelGateway, VersionedModelGateway
 from ..rules import evaluate_consensus
 from ..runtime import (
     BudgetLedger,
@@ -35,6 +35,7 @@ from .invocation import (
     InvocationCancelled,
     InvocationFailure,
 )
+from .preflight import preflight_real_evaluation
 from .signals import (
     SIGNAL_PROMPT_VERSION,
     InvalidModelOutput,
@@ -142,6 +143,7 @@ def _stage_cache_key(
     normalized_input_hash: str,
     batch_manifest: object,
     prompt_version: str,
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> CacheKey:
     return cache_key(
         CacheKeyParts(
@@ -153,7 +155,12 @@ def _stage_cache_key(
             prompt_version=prompt_version,
             schema_version=request.schema_version,
             model_config_ref=request.model.config_ref,
-            model_revision=request.model.revision,
+            model_name=(
+                frozen_identity.model_name if frozen_identity else request.model.model_name
+            ),
+            model_revision=(
+                frozen_identity.model_revision if frozen_identity else request.model.revision
+            ),
         )
     )
 
@@ -167,6 +174,7 @@ def _signal_cache_key(
     request: AnalysisRequest,
     plan: SamplingPlan,
     batch: CommentBatch,
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> CacheKey:
     return _stage_cache_key(
         request,
@@ -179,6 +187,7 @@ def _signal_cache_key(
             "estimated_input_tokens": batch.estimated_input_tokens,
         },
         prompt_version=SIGNAL_PROMPT_VERSION,
+        frozen_identity=frozen_identity,
     )
 
 
@@ -235,6 +244,7 @@ def _cluster_cache_key(
     request: AnalysisRequest,
     plan: SamplingPlan,
     signals: Sequence[NeedSignal],
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> CacheKey:
     comment_ids = [signal.comment_id for signal in signals]
     return _stage_cache_key(
@@ -251,6 +261,7 @@ def _cluster_cache_key(
             "comment_ids": sorted(comment_ids),
         },
         prompt_version=CLUSTER_PROMPT_VERSION,
+        frozen_identity=frozen_identity,
     )
 
 
@@ -355,6 +366,46 @@ def analyze_m2(
 ) -> M2AnalysisResult:
     """执行一次离线 M2 分析，并把所有停止条件映射为稳定状态。"""
 
+    return _analyze_m2(
+        request, manifest, plan, gateway, cache, cancellation_probe=cancellation_probe
+    )
+
+
+def analyze_m2_real_evaluation(
+    request: AnalysisRequest,
+    manifest: SamplingManifest,
+    plan: SamplingPlan,
+    gateway: VersionedModelGateway,
+    cache: InMemorySemanticCache,
+    *,
+    cancellation_probe: CancellationProbe = lambda: False,
+) -> M2AnalysisResult:
+    """准入并冻结模型身份后执行评测；拒绝条件在任何调用前抛出。"""
+
+    request = request.model_copy(deep=True)
+    frozen_identity = preflight_real_evaluation(request, gateway)
+    return _analyze_m2(
+        request,
+        manifest,
+        plan,
+        gateway,
+        cache,
+        cancellation_probe=cancellation_probe,
+        frozen_identity=frozen_identity,
+    )
+
+
+def _analyze_m2(
+    request: AnalysisRequest,
+    manifest: SamplingManifest,
+    plan: SamplingPlan,
+    gateway: ModelGateway,
+    cache: InMemorySemanticCache,
+    *,
+    cancellation_probe: CancellationProbe = lambda: False,
+    frozen_identity: FrozenModelIdentity | None = None,
+) -> M2AnalysisResult:
+
     ledger = BudgetLedger.from_analysis_budget(request.budget)
     completed: list[CompletedStep] = []
     signals: list[NeedSignal] = []
@@ -393,7 +444,7 @@ def analyze_m2(
         for batch in batch_plan.batches:
             if request.cancellation_requested or cancellation_probe():
                 raise InvocationCancelled(())
-            key = _signal_cache_key(request, plan, batch)
+            key = _signal_cache_key(request, plan, batch, frozen_identity)
             cached, event = cache.get(
                 key,
                 stage="signals",
@@ -410,6 +461,7 @@ def analyze_m2(
                     ledger,
                     max_output_tokens=per_call_output,
                     cancellation_probe=cancellation_probe,
+                    frozen_identity=frozen_identity,
                 )
                 signals.extend(extraction.signals)
                 audits.extend(extraction.audits)
@@ -429,7 +481,7 @@ def analyze_m2(
                 completed_steps=completed,
             )
 
-        cluster_key = _cluster_cache_key(request, plan, signals)
+        cluster_key = _cluster_cache_key(request, plan, signals, frozen_identity)
         cached_clusters, cluster_event = cache.get(
             cluster_key,
             stage="cluster",
@@ -446,6 +498,7 @@ def analyze_m2(
                 ledger,
                 max_output_tokens=per_call_output,
                 cancellation_probe=cancellation_probe,
+                frozen_identity=frozen_identity,
             )
             audits.extend(cluster_result.audits)
             clusters = cluster_result.clusters
