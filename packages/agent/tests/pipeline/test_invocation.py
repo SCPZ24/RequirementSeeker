@@ -225,11 +225,24 @@ def test_frozen_identity_rejects_inconsistent_call_before_gateway(
     assert budget.snapshot().model_calls_reserved == 0
 
 
-def test_budget_exceeded_retains_drifted_identity_before_identity_failure() -> None:
+@pytest.mark.parametrize(
+    ("actual_name", "actual_revision", "error_code"),
+    [
+        ("scenario-model", "m2-fixture-1", None),
+        ("other-model", "m2-fixture-1", "model_identity_mismatch"),
+        ("scenario-model", "other-revision", "model_identity_mismatch"),
+        ("scenario-model", None, "model_identity_unverifiable"),
+    ],
+)
+def test_budget_exceeded_retains_identity_error_and_actual_usage(
+    actual_name: str, actual_revision: str | None, error_code: str | None
+) -> None:
     frozen = FrozenModelIdentity(model_name="scenario-model", model_revision="m2-fixture-1")
     call = model_call().model_copy(update={**frozen.model_dump(), "max_output_tokens": 5})
     usage = TokenUsage(input_tokens=20, output_tokens=20, total_tokens=40)
-    reply = response({}, usage=usage).model_copy(update={"model_name": "other-model"})
+    reply = response({}, usage=usage).model_copy(
+        update={"model_name": actual_name, "model_revision": actual_revision}
+    )
     gateway = ScriptedGateway([reply])
     budget = ledger()
 
@@ -241,12 +254,18 @@ def test_budget_exceeded_retains_drifted_identity_before_identity_failure() -> N
     assert raised.value.resource == "input_tokens"
     assert len(gateway.calls) == 1
     audit = raised.value.audits[0]
+    assert len(raised.value.audits) == 1
+    assert audit.status == ("success" if error_code is None else "error")
+    assert audit.error_code == error_code
     assert audit.requested_model_name == frozen.model_name
     assert audit.requested_revision == frozen.model_revision
-    assert audit.actual_model_name == "other-model"
-    assert audit.actual_revision == reply.model_revision
+    assert audit.actual_model_name == actual_name
+    assert audit.actual_revision == actual_revision
     assert audit.usage == usage
     assert budget.snapshot().input_tokens_consumed == 20
+    assert budget.snapshot().output_tokens_consumed == 20
+    assert budget.snapshot().model_calls_consumed == 1
+    assert budget.snapshot().model_calls_reserved == 0
 
 
 @pytest.mark.parametrize("code", ["authentication_failed", "capability_unsupported"])

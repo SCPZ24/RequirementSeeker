@@ -182,13 +182,8 @@ def invoke_model(
                 audits=tuple(audits),
             ) from error
 
-        try:
-            ledger.settle(reservation, response.usage)
-        except BudgetLimitExceeded as error:
-            audits.append(_audit(request, attempted_call, status="success", response=response))
-            raise InvocationBudgetExceeded(error.resource, tuple(audits)) from error
+        identity_error: GatewayErrorCode | None = None
         if frozen_identity is not None:
-            identity_error: GatewayErrorCode | None = None
             if response.model_revision is None:
                 identity_error = "model_identity_unverifiable"
             elif (
@@ -196,17 +191,31 @@ def invoke_model(
                 or response.model_revision != frozen_identity.model_revision
             ):
                 identity_error = "model_identity_mismatch"
-            if identity_error is not None:
-                audits.append(
-                    _audit(
-                        request,
-                        attempted_call,
-                        status="error",
-                        response=response,
-                        error_code=identity_error,
-                    )
+        try:
+            ledger.settle(reservation, response.usage)
+        except BudgetLimitExceeded as error:
+            # 预算错误优先返回，审计仍如实记录响应身份错误。
+            audits.append(
+                _audit(
+                    request,
+                    attempted_call,
+                    status="success" if identity_error is None else "error",
+                    response=response,
+                    error_code=identity_error,
                 )
-                raise InvocationFailure(identity_error, retryable=False, audits=tuple(audits))
+            )
+            raise InvocationBudgetExceeded(error.resource, tuple(audits)) from error
+        if identity_error is not None:
+            audits.append(
+                _audit(
+                    request,
+                    attempted_call,
+                    status="error",
+                    response=response,
+                    error_code=identity_error,
+                )
+            )
+            raise InvocationFailure(identity_error, retryable=False, audits=tuple(audits))
         if request.cancellation_requested or cancellation_probe():
             audits.append(_audit(request, attempted_call, status="cancelled", response=response))
             raise InvocationCancelled(tuple(audits))
