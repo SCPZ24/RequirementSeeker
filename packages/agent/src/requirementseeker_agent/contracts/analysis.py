@@ -142,6 +142,10 @@ class ModelInvocationAudit(Contract):
     invocation_id: Identifier
     model_config_ref: Identifier
     model_name: Identifier
+    requested_model_name: Identifier | None = None
+    requested_revision: Identifier | None = None
+    actual_model_name: Identifier | None = None
+    actual_revision: Identifier | None = None
     versions: Versions
     input_hash: Hash
     step: Step

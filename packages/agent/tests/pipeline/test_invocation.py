@@ -114,6 +114,31 @@ def test_transport_error_is_retried_and_every_attempt_is_audited() -> None:
     assert [audit.status for audit in result.audits] == ["error", "success"]
     assert [audit.attempt for audit in result.audits] == [1, 2]
     assert result.next_attempt == 3
+    failed, succeeded = result.audits
+    assert failed.model_name == "synthetic-model"
+    assert failed.requested_model_name == "synthetic-model"
+    assert failed.requested_revision is None
+    assert failed.actual_model_name is None
+    assert failed.actual_revision is None
+    assert succeeded.model_name == "scenario-model"
+    assert succeeded.requested_model_name == "synthetic-model"
+    assert succeeded.requested_revision is None
+    assert succeeded.actual_model_name == "scenario-model"
+    assert succeeded.actual_revision == "m2-fixture-1"
+
+
+def test_success_audit_keeps_missing_actual_revision_without_requested_fallback() -> None:
+    call = model_call().model_copy(update={"model_revision": "requested-revision"})
+    reply = response({"signals": []}).model_copy(update={"model_revision": None})
+    gateway = ScriptedGateway([reply])
+
+    result = invoke_model(analysis_request(), call, gateway, ledger(), input_tokens=100)
+
+    audit = result.audits[0]
+    assert audit.requested_model_name == call.model_name
+    assert audit.requested_revision == "requested-revision"
+    assert audit.actual_model_name == reply.model_name
+    assert audit.actual_revision is None
 
 
 @pytest.mark.parametrize("code", ["authentication_failed", "capability_unsupported"])
@@ -248,3 +273,9 @@ def test_cancellation_after_response_creates_cancelled_audit() -> None:
     assert len(raised.value.audits) == 1
     assert raised.value.audits[0].status == "cancelled"
     assert raised.value.audits[0].usage is not None
+    audit = raised.value.audits[0]
+    assert audit.model_name == "scenario-model"
+    assert audit.requested_model_name == "synthetic-model"
+    assert audit.requested_revision is None
+    assert audit.actual_model_name == "scenario-model"
+    assert audit.actual_revision == "m2-fixture-1"
