@@ -161,6 +161,7 @@ def _stage_cache_key(
             model_revision=(
                 frozen_identity.model_revision if frozen_identity else request.model.revision
             ),
+            identity_verification_required=frozen_identity is not None,
         )
     )
 

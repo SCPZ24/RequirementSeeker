@@ -260,3 +260,38 @@ def test_ordinary_cache_also_distinguishes_model_name():
     request.model.model_name = "another-model"
     result = m2.analyze_m2(request, manifest, plan, adapter, cache)
     assert [event.status for event in result.cache_events] == ["miss", "miss"]
+
+
+@pytest.mark.parametrize("stage", ["signals", "cluster"])
+def test_ordinary_cache_cannot_hide_real_evaluation_response_drift(stage):
+    request, manifest, plan = frozen_inputs()
+    cache = InMemorySemanticCache()
+    adapter = VersionedGateway(stage=stage, wrong={"model_revision": "drifted"})
+    ordinary = m2.analyze_m2(request, manifest, plan, adapter, cache)
+    assert ordinary.status == "completed"
+    calls_before = len(adapter.calls)
+
+    formal = m2.analyze_m2_real_evaluation(request, manifest, plan, adapter, cache)
+
+    assert formal.status == "fatal_error"
+    assert formal.error_code == "model_identity_mismatch"
+    expected_calls = 1 if stage == "signals" else 2
+    assert [event.status for event in formal.cache_events] == ["miss"] * expected_calls
+    assert len(adapter.calls) == calls_before + expected_calls
+    assert len(formal.audits) == expected_calls
+
+
+def test_formal_cache_does_not_supply_ordinary_analysis():
+    request, manifest, plan = frozen_inputs()
+    cache = InMemorySemanticCache()
+    adapter = VersionedGateway()
+    formal = m2.analyze_m2_real_evaluation(request, manifest, plan, adapter, cache)
+    ordinary = m2.analyze_m2(request, manifest, plan, adapter, cache)
+    replay = m2.analyze_m2_real_evaluation(request, manifest, plan, adapter, cache)
+
+    assert formal.status == ordinary.status == replay.status == "completed"
+    assert [event.status for event in ordinary.cache_events] == ["miss", "miss"]
+    assert len(ordinary.audits) == 2
+    assert [event.status for event in replay.cache_events] == ["hit", "hit"]
+    assert replay.audits == []
+    assert len(adapter.calls) == 4

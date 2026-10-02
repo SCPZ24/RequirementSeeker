@@ -23,6 +23,8 @@ class CacheKeyParts(Contract):
     model_config_ref: Identifier
     model_name: Identifier | None = None
     model_revision: Identifier | None
+    # 区分生成阶段是否要求冻结身份校验，避免普通分析缓存绕过评测边界。
+    identity_verification_required: bool = False
 
 
 @dataclass(frozen=True, slots=True)
