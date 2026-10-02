@@ -23,6 +23,8 @@ GatewayErrorCode = Literal[
     "authentication_failed",
     "cancelled",
     "invalid_configuration",
+    "model_identity_mismatch",
+    "model_identity_unverifiable",
 ]
 
 

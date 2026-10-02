@@ -9,6 +9,7 @@ from typing import Literal
 from ..contracts.analysis import ModelInvocationAudit
 from ..contracts.requests import AnalysisRequest
 from ..model.types import (
+    FrozenModelIdentity,
     GatewayErrorCode,
     ModelCallRequest,
     ModelCallResponse,
@@ -126,8 +127,15 @@ def invoke_model(
     input_tokens: int,
     start_attempt: int = 1,
     cancellation_probe: CancellationProbe = _never_cancelled,
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> InvocationResult:
     """执行调用并仅重试明确的传输错误；每次尝试独立预留预算。"""
+
+    if frozen_identity is not None and (
+        call.model_name != frozen_identity.model_name
+        or call.model_revision != frozen_identity.model_revision
+    ):
+        raise InvocationFailure("invalid_configuration", retryable=False, audits=())
 
     capabilities = gateway.capabilities
     if (
@@ -179,6 +187,26 @@ def invoke_model(
         except BudgetLimitExceeded as error:
             audits.append(_audit(request, attempted_call, status="success", response=response))
             raise InvocationBudgetExceeded(error.resource, tuple(audits)) from error
+        if frozen_identity is not None:
+            identity_error: GatewayErrorCode | None = None
+            if response.model_revision is None:
+                identity_error = "model_identity_unverifiable"
+            elif (
+                response.model_name != frozen_identity.model_name
+                or response.model_revision != frozen_identity.model_revision
+            ):
+                identity_error = "model_identity_mismatch"
+            if identity_error is not None:
+                audits.append(
+                    _audit(
+                        request,
+                        attempted_call,
+                        status="error",
+                        response=response,
+                        error_code=identity_error,
+                    )
+                )
+                raise InvocationFailure(identity_error, retryable=False, audits=tuple(audits))
         if request.cancellation_requested or cancellation_probe():
             audits.append(_audit(request, attempted_call, status="cancelled", response=response))
             raise InvocationCancelled(tuple(audits))

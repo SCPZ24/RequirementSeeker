@@ -14,6 +14,7 @@ from requirementseeker_agent.model import (
     ModelCapabilities,
     ModelGatewayError,
 )
+from requirementseeker_agent.model.types import FrozenModelIdentity
 from requirementseeker_agent.pipeline.invocation import (
     InvocationCancelled,
     InvocationFailure,
@@ -139,6 +140,113 @@ def test_success_audit_keeps_missing_actual_revision_without_requested_fallback(
     assert audit.requested_revision == "requested-revision"
     assert audit.actual_model_name == reply.model_name
     assert audit.actual_revision is None
+
+
+@pytest.mark.parametrize(
+    ("actual_name", "actual_revision", "error_code"),
+    [
+        ("scenario-model", "m2-fixture-1", None),
+        ("other-model", "m2-fixture-1", "model_identity_mismatch"),
+        ("scenario-model", "other-revision", "model_identity_mismatch"),
+        ("scenario-model", None, "model_identity_unverifiable"),
+    ],
+)
+def test_frozen_identity_checks_actual_response_after_settlement(
+    actual_name: str, actual_revision: str | None, error_code: str | None
+) -> None:
+    frozen = FrozenModelIdentity(model_name="scenario-model", model_revision="m2-fixture-1")
+    call = model_call().model_copy(update=frozen.model_dump())
+    reply = response({"signals": []}).model_copy(
+        update={"model_name": actual_name, "model_revision": actual_revision}
+    )
+    gateway = ScriptedGateway([reply])
+    budget = ledger()
+
+    if error_code is None:
+        result = invoke_model(
+            analysis_request(), call, gateway, budget, input_tokens=100, frozen_identity=frozen
+        )
+        assert result.response == reply
+        audits = result.audits
+        assert audits[0].status == "success"
+    else:
+        with pytest.raises(InvocationFailure) as raised:
+            invoke_model(
+                analysis_request(), call, gateway, budget, input_tokens=100, frozen_identity=frozen
+            )
+        assert raised.value.code == error_code
+        assert raised.value.retryable is False
+        audits = raised.value.audits
+        assert audits[0].status == "error"
+        assert audits[0].error_code == error_code
+
+    assert len(gateway.calls) == 1
+    assert len(audits) == 1
+    assert audits[0].requested_model_name == call.model_name
+    assert audits[0].requested_revision == call.model_revision
+    assert audits[0].actual_model_name == actual_name
+    assert audits[0].actual_revision == actual_revision
+    assert audits[0].usage == DEFAULT_USAGE
+    snapshot = budget.snapshot()
+    assert snapshot.model_calls_consumed == 1
+    assert snapshot.input_tokens_consumed == 80
+    assert snapshot.output_tokens_consumed == 10
+    assert snapshot.model_calls_reserved == 0
+
+
+@pytest.mark.parametrize(
+    ("requested_name", "requested_revision"),
+    [
+        ("other-model", "m2-fixture-1"),
+        ("scenario-model", "other-revision"),
+        ("scenario-model", None),
+    ],
+)
+def test_frozen_identity_rejects_inconsistent_call_before_gateway(
+    requested_name: str, requested_revision: str | None
+) -> None:
+    frozen = FrozenModelIdentity(model_name="scenario-model", model_revision="m2-fixture-1")
+    call = model_call().model_copy(
+        update={"model_name": requested_name, "model_revision": requested_revision}
+    )
+    gateway = ScriptedGateway([response({"signals": []})])
+    budget = ledger()
+
+    with pytest.raises(InvocationFailure) as raised:
+        invoke_model(
+            analysis_request(), call, gateway, budget, input_tokens=100, frozen_identity=frozen
+        )
+
+    assert raised.value.code == "invalid_configuration"
+    assert raised.value.retryable is False
+    assert raised.value.audits == ()
+    assert gateway.calls == []
+    assert budget.snapshot().model_calls_consumed == 0
+    assert budget.snapshot().model_calls_reserved == 0
+
+
+def test_budget_exceeded_retains_drifted_identity_before_identity_failure() -> None:
+    frozen = FrozenModelIdentity(model_name="scenario-model", model_revision="m2-fixture-1")
+    call = model_call().model_copy(update={**frozen.model_dump(), "max_output_tokens": 5})
+    usage = TokenUsage(input_tokens=20, output_tokens=20, total_tokens=40)
+    reply = response({}, usage=usage).model_copy(update={"model_name": "other-model"})
+    gateway = ScriptedGateway([reply])
+    budget = ledger()
+
+    with pytest.raises(BudgetLimitExceeded) as raised:
+        invoke_model(
+            analysis_request(), call, gateway, budget, input_tokens=5, frozen_identity=frozen
+        )
+
+    assert raised.value.resource == "input_tokens"
+    assert len(gateway.calls) == 1
+    audit = raised.value.audits[0]
+    assert audit.requested_model_name == frozen.model_name
+    assert audit.requested_revision == frozen.model_revision
+    assert audit.actual_model_name == "other-model"
+    assert audit.actual_revision == reply.model_revision
+    assert audit.usage == usage
+    assert budget.snapshot().input_tokens_consumed == 20
 
 
 @pytest.mark.parametrize("code", ["authentication_failed", "capability_unsupported"])
