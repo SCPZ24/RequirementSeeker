@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python 3.12、Pydantic 2、pytest、JSON Schema、Ruff、mypy strict、uv。
 
+**2026-10-03 执行状态：** Task 1–4 已实施并经阶段复审；Task 4 的缓存模式隔离补充修复为 `b536329`，缓存键新增模型名称和 `identity_verification_required`，使用冻结 revision，普通与正式缓存互不复用。Task 5 的离线门禁为 281 tests passed、Ruff check 通过、56 文件格式通过、mypy 30 文件无问题、离线 0.3.0 构建成功。审计 Schema 新四字段保留 1.0，只保证新消费者读取旧审计，旧消费者接收新字段前须更新。验收条件 7 当前仅身份端口与响应契约就绪，具体 provider SDK 尚待选型，本轮没有实现生产适配器。Step 7 本地交接和 Step 8 最终独立复审保持待办；最终结果由该复审及新验证决定。
+
 ---
 
 ## 文件职责
@@ -36,7 +38,7 @@
 - Modify: `packages/agent/src/requirementseeker_agent/model/fake.py`
 - Modify: `packages/agent/src/requirementseeker_agent/model/__init__.py`
 
-- [ ] **Step 1: 写 preflight 的失败测试**
+- [x] **Step 1: 写 preflight 的失败测试**
 
 在 `test_preflight.py` 使用合成 `AnalysisRequest` 和不会调用 `invoke` 的 gateway，覆盖非空 revision 成功，以及以下稳定错误码：
 
@@ -114,7 +116,7 @@ def test_preflight_fails_closed_on_unfrozen_identity(
 
 另加一个 gateway `supports_structured_output=False` 的测试，期望 `gateway_capability_unsupported`。测试不得调用 `invoke`，可令 `invoke` 直接 `raise AssertionError("preflight_must_not_invoke_model")`。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run:
 
@@ -124,7 +126,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: collection 失败，指出 `ModelRuntimeIdentity` 或 `pipeline.preflight` 尚不存在；这证明测试针对缺失能力。
 
-- [ ] **Step 3: 实现最小身份类型和 preflight**
+- [x] **Step 3: 实现最小身份类型和 preflight**
 
 在 `model/types.py` 增加：
 
@@ -213,7 +215,7 @@ def preflight_real_evaluation(
 
 从 `model/__init__.py` 导出三个新类型。不要把 preflight 接到 `analyze_m2`。
 
-- [ ] **Step 4: 运行 GREEN 和类型检查**
+- [x] **Step 4: 运行 GREEN 和类型检查**
 
 Run:
 
@@ -224,7 +226,7 @@ uv run --offline --locked --project packages/agent mypy packages/agent/src
 
 Expected: 新 preflight 与既有 model 测试全部通过；mypy 报告无问题。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```powershell
 git add packages/agent/src/requirementseeker_agent/model packages/agent/src/requirementseeker_agent/pipeline/preflight.py packages/agent/tests/pipeline/test_preflight.py
@@ -238,7 +240,7 @@ git commit -m "feat(agent): add real evaluation model preflight"
 - Modify: `packages/agent/src/requirementseeker_agent/pipeline/invocation.py`
 - Modify: `packages/agent/tests/pipeline/test_invocation.py`
 
-- [ ] **Step 1: 写审计字段 RED 测试**
+- [x] **Step 1: 写审计字段 RED 测试**
 
 在现有成功、传输失败和取消测试中加入明确断言，并新增 provider 返回空 revision 的 fixture helper：
 
@@ -270,7 +272,7 @@ def test_transport_error_audit_has_no_actual_identity() -> None:
     assert audit.actual_revision is None
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run:
 
@@ -280,7 +282,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: 新断言以 `ModelInvocationAudit` 缺少 requested/actual 属性失败。
 
-- [ ] **Step 3: 最小扩展审计契约与构造逻辑**
+- [x] **Step 3: 最小扩展审计契约与构造逻辑**
 
 在 `ModelInvocationAudit` 保留现有 `model_name` 字段以兼容既有线协议，并增加可选字段：
 
@@ -314,7 +316,7 @@ actual_revision=None if response is None else response.model_revision,
 
 不得把空 actual revision 替换成 requested revision。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
 Run:
 
@@ -324,7 +326,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: 两组测试通过；传输错误 actual 字段为 null，收到响应的审计保留 provider 原值。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```powershell
 git add packages/agent/src/requirementseeker_agent/contracts/analysis.py packages/agent/src/requirementseeker_agent/pipeline/invocation.py packages/agent/tests/pipeline/test_invocation.py
@@ -338,7 +340,7 @@ git commit -m "feat(agent): audit requested and actual model identity"
 - Modify: `packages/agent/src/requirementseeker_agent/pipeline/invocation.py`
 - Modify: `packages/agent/tests/pipeline/test_invocation.py`
 
-- [ ] **Step 1: 写实际身份不一致的 RED 测试**
+- [x] **Step 1: 写实际身份不一致的 RED 测试**
 
 构造冻结身份并分别覆盖错误 revision、空 revision 和错误 model name：
 
@@ -394,7 +396,7 @@ def test_frozen_identity_rejects_unverified_provider_response(
 
 再加匹配身份成功测试，断言原响应正常返回且审计为 success。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run:
 
@@ -404,7 +406,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: `invoke_model` 不接受 `frozen_identity` 或错误响应未失败。
 
-- [ ] **Step 3: 实现 fail-closed 身份核对**
+- [x] **Step 3: 实现 fail-closed 身份核对**
 
 把两个代码加入 `GatewayErrorCode`：
 
@@ -450,7 +452,7 @@ if frozen_identity is not None:
 
 普通调用的默认 `None` 不核对身份，确保兼容条件 1。
 
-- [ ] **Step 4: 运行 GREEN 和相关回归**
+- [x] **Step 4: 运行 GREEN 和相关回归**
 
 Run:
 
@@ -460,7 +462,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: 身份匹配成功；缺失或不一致均一次调用后非重试失败；用量已经结算；预算测试保持通过。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```powershell
 git add packages/agent/src/requirementseeker_agent/model/types.py packages/agent/src/requirementseeker_agent/pipeline/invocation.py packages/agent/tests/pipeline/test_invocation.py
@@ -479,7 +481,7 @@ git commit -m "fix(agent): fail closed on model identity drift"
 - Modify: `packages/agent/tests/runtime/test_cache.py`
 - Modify: `packages/agent/tests/test_public_api.py`
 
-- [ ] **Step 1: 写普通兼容和正式入口 RED 测试**
+- [x] **Step 1: 写普通兼容和正式入口 RED 测试**
 
 在 `test_m2.py` 明确覆盖验收条件 1–5：
 
@@ -548,7 +550,7 @@ def test_cache_key_changes_with_frozen_model_revision() -> None:
     )
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
 Run:
 
@@ -558,7 +560,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/p
 
 Expected: 缺少 `analyze_m2_real_evaluation`，正式入口测试失败；cache key 单测可能已经通过，记录它是既有事实而不是新增 RED，并继续保留为验收锁定。
 
-- [ ] **Step 3: 把冻结身份贯穿信号和聚类调用**
+- [x] **Step 3: 把冻结身份贯穿信号和聚类调用**
 
 给 `extract_signals`、`cluster_signals` 和 `clusters._invoke_batch` 增加：
 
@@ -574,7 +576,7 @@ frozen_identity=frozen_identity,
 
 所有内部聚类批次递归/循环调用都传同一个不可变值；不得从响应重新生成冻结身份。
 
-- [ ] **Step 4: 拆出共享实现并新增正式入口**
+- [x] **Step 4: 拆出共享实现并新增正式入口**
 
 在 `m2.py` 保留原公共签名，并引入内部实现：
 
@@ -653,7 +655,7 @@ model_revision=model_revision,
 
 不要在正式路径回退到 `request.model.revision` 或 response revision。
 
-- [ ] **Step 5: 导出正式入口并运行 GREEN**
+- [x] **Step 5: 导出正式入口并运行 GREEN**
 
 从 `pipeline/__init__.py` 和顶层 `__init__.py` 导出 `analyze_m2_real_evaluation`；在 `test_public_api.py` 断言其可调用。运行：
 
@@ -664,7 +666,7 @@ uv run --offline --locked --project packages/agent mypy packages/agent/src
 
 Expected: 普通 `revision=None` 完成；正式空 revision 在零调用处失败；实际身份漂移映射为非成功结果且不缓存；全部目标测试和 mypy 通过。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```powershell
 git add packages/agent/src/requirementseeker_agent/pipeline packages/agent/src/requirementseeker_agent/__init__.py packages/agent/tests/pipeline/test_m2.py packages/agent/tests/runtime/test_cache.py packages/agent/tests/test_public_api.py
@@ -682,7 +684,7 @@ git commit -m "feat(agent): add frozen real evaluation entrypoint"
 - Local-only update: `E:/Projects/RequirementSeeker/docs/HANDOFF.md`
 - Local-only update: `E:/Projects/RequirementSeeker/docs/execution/2026-09-29.md`
 
-- [ ] **Step 1: 运行 Schema RED**
+- [x] **Step 1: 运行 Schema RED**
 
 Run:
 
@@ -692,7 +694,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/c
 
 Expected: `test_committed_schema_matches_generated_schema[result]` 失败，显示已提交 result Schema 尚无四个审计字段。不得修改测试来掩盖差异。
 
-- [ ] **Step 2: 从 Pydantic 权威模型重新生成 result Schema**
+- [x] **Step 2: 从 Pydantic 权威模型重新生成 result Schema**
 
 Run:
 
@@ -708,7 +710,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/c
 
 Expected: committed/generated Schema 相等，所有有效 fixture 通过标准 JSON Schema。
 
-- [ ] **Step 3: 更新公开文档**
+- [x] **Step 3: 更新公开文档**
 
 在 `packages/agent/README.md` 增加真实评测入口示例，明确示例只使用确定性 gateway：
 
@@ -728,7 +730,7 @@ result = analyze_m2_real_evaluation(request, manifest, plan, gateway, cache)
 
 在 M2 acceptance 文档中仅记录新的离线门禁，不宣称真实模型 H0/H1，不把 24/24 写成人工语义金标。
 
-- [ ] **Step 4: 运行完整 Agent 门禁**
+- [x] **Step 4: 运行完整 Agent 门禁**
 
 Run:
 
@@ -743,7 +745,7 @@ git diff --check upstream/main...HEAD
 
 Expected: 全部命令 exit 0；测试数应高于基线 236；构建生成 0.3.0 sdist/wheel；无真实网络模型调用、密钥读取或费用。
 
-- [ ] **Step 5: 复核验收条件和敏感边界**
+- [x] **Step 5: 复核验收条件和敏感边界**
 
 逐项核对并在本地执行日志记录证据：
 
@@ -759,9 +761,11 @@ Expected: 全部命令 exit 0；测试数应高于基线 236；构建生成 0.3.
 9. export-labels 由 upstream issue #8 单独跟踪。
 ```
 
+条件 7 的本轮完成范围仅为端口、场景网关和响应身份契约；具体 provider SDK 适配器尚未交付，不可将其标为生产适配器验收通过。
+
 检查 Git 差异中没有 `.local-data`、评论、视频 ID、密钥、真实标签内容或 provider 凭据。
 
-- [ ] **Step 6: 提交文档和 Schema**
+- [x] **Step 6: 提交文档和 Schema**
 
 ```powershell
 git add packages/agent/schemas/analysis-result.schema.json packages/agent/README.md docs/contracts/agent-v1.md docs/development/2026-09-07-m2-acceptance.md

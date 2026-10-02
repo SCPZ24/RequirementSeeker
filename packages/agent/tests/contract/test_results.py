@@ -74,6 +74,19 @@ def test_unknown_usage_stays_null():
         )
     )
     assert audit.usage is None
+    assert audit.requested_model_name is None
+    assert audit.requested_revision is None
+    assert audit.actual_model_name is None
+    assert audit.actual_revision is None
+
+
+def test_identity_audit_fixture_round_trip():
+    data = json.loads((FIXTURES / "valid/result-identity-audit.json").read_text(encoding="utf-8"))
+    result = parse(data)
+    audit = result.audits[0]
+    assert audit.requested_model_name == audit.actual_model_name == "scenario-model"
+    assert audit.requested_revision == audit.actual_revision == "m2-fixture-1"
+    assert parse(json.loads(result.model_dump_json())) == result
 
 
 def test_token_total_must_match_known_components():

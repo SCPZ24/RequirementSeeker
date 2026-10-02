@@ -63,3 +63,27 @@ uv run --project packages/agent pytest packages/agent/tests/evaluation packages/
 wheel 已核对包含模型替身、M2 编排与结果类型，以及 `signal-v1.txt`、`cluster-v1.txt` 两份提示词资源。以上检查在 Windows、PowerShell 7 中执行；macOS 和真实模型仍未验证。
 
 合并前独立复核补强了预算与取消门禁：超额 usage 会按实记账并停止成功状态；结构修复会重新估算输入并检查单次能力；预算耗尽会保留已发生调用的审计；公共入口可以观察运行中取消。新增回归测试均经历失败再修复，完整 Agent 回归为 231 项通过。上述结果仍仅覆盖离线场景网关。
+
+## 2026-10-03 真实评测身份准入的离线门禁
+
+本轮新增 `preflight_real_evaluation`、不可变且 revision 非空的 `FrozenModelIdentity`、`VersionedModelGateway` 端口和独立 `analyze_m2_real_evaluation` 入口。准入在零模型调用下核对配置身份；实际响应在信号、聚类、结构修复和合并边界核对 model/revision，并保留 requested/actual 四项审计。普通 `analyze_m2` 保持 `revision=None` 行为。
+
+复核修复了缓存模式隔离：阶段键同时绑定模型名称、冻结 revision 和 `identity_verification_required`，普通缓存不能隐藏正式入口的响应身份漂移，正式缓存也不会供普通模式复用。身份失败保留已发生用量及审计，失败阶段不重试、不写缓存。
+
+Schema RED 实测为 1 failed、3 passed，失败位置是 result Schema 与权威 Pydantic 模型不相等；重新导出后与完整回归一同通过。新增演示子进程测试先以缺少 `audits` 的 `KeyError` 失败（1 failed、1 passed），然后实现 `--real-evaluation` 合成选项；Schema 与演示的定向 GREEN 为 6 passed。另以独立合成结果 fixture 锁定新审计 JSON 往返，旧审计缺失四字段时均默认为 null。结果 Schema 继续为 `1.0`：新消费者能读旧审计，但拒绝未知字段的旧消费者必须更新后才能读新审计，不能声称双向兼容。
+
+在隔离工作树、Windows PowerShell 7 下实际运行：
+
+| 检查 | 本轮实际结果 |
+|---|---|
+| `uv run --offline --locked --project packages/agent pytest packages/agent/tests -q` | 281 passed |
+| Ruff check（全部 src/tests/examples） | 通过 |
+| Ruff format --check（全部 src/tests/examples） | 56 files already formatted |
+| mypy strict | 30 个源码文件无问题 |
+| `uv build --offline --project packages/agent` | 生成 0.3.0 sdist 与 wheel |
+| `git diff --check` 与 `git diff --check upstream/main...HEAD` | 通过 |
+| `m2_fake_demo.py --real-evaluation` | completed；3 信号、1 簇、1 项通过共识、2 审计；requested/actual 均为 scenario-model / m2-fixture-1 |
+
+这些检查只证明合成链路与身份契约。验收条件 7 当前是端口及响应身份契约就绪，具体 provider SDK 适配器尚待选型，本轮没有交付生产适配器或调用真实模型。真实 adapter 必须获得 provider 可核验的 revision，不能用请求值回填响应值。同步取消只能在调用边界观察；预算没有货币上限或准确 Token 保证，preflight 也不检查累计输入预算与单次能力兼容性。
+
+现有 24/24 结构准入计数即便通过，也不等于人工语义金标或真实评测完成；本轮未改标签快照、未消除人工语义裁决前置条件。标签 `export-labels` 继续由 upstream issue #8 单独跟踪。本轮未读取真实 provider 凭据、未产生真实模型费用，也不宣称 H0、H1 或生产就绪；最终独立复审仍需在本记录更新后执行。

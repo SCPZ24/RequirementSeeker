@@ -1,5 +1,6 @@
 """Run the deterministic M2 pipeline without a model service or platform login."""
 
+import argparse
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -9,12 +10,16 @@ from requirementseeker_agent import (
     SamplingManifest,
     ScenarioModelGateway,
     analyze_m2,
+    analyze_m2_real_evaluation,
 )
 from requirementseeker_agent.runtime import InMemorySemanticCache
 from requirementseeker_agent.sampling import plan_sampling
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--real-evaluation", action="store_true", help="离线演示身份准入入口")
+    args = parser.parse_args()
     fixture = Path(__file__).parents[1] / "tests" / "fixtures" / "valid" / "request.json"
     source = json.loads(fixture.read_text(encoding="utf-8"))
     source["video"]["title"] = "批量导出记录的合成视频"
@@ -22,6 +27,9 @@ def main() -> None:
     for index, (comment, text) in enumerate(zip(source["comments"], texts, strict=True), start=1):
         comment["comment_id"] = f"c{index}"
         comment["text"] = text
+    if args.real_evaluation:
+        source["model"]["model_name"] = "scenario-model"
+        source["model"]["revision"] = "m2-fixture-1"
     request = AnalysisRequest.model_validate(source)
 
     comment_ids = [comment.comment_id for comment in request.comments]
@@ -47,7 +55,8 @@ def main() -> None:
         stratum_comment_ids={"top": comment_ids},
     )
     plan = plan_sampling(manifest, request.comments, request.budget)
-    result = analyze_m2(
+    analyze = analyze_m2_real_evaluation if args.real_evaluation else analyze_m2
+    result = analyze(
         request,
         manifest,
         plan,
@@ -65,6 +74,11 @@ def main() -> None:
                     for decision in result.decisions
                 ],
                 "budget": asdict(result.budget),
+                **(
+                    {"audits": [audit.model_dump(mode="json") for audit in result.audits]}
+                    if args.real_evaluation
+                    else {}
+                ),
             },
             ensure_ascii=False,
             sort_keys=True,

@@ -70,6 +70,27 @@ JSON 使用 UTF-8，版本字段必填且为 `1.0`。标识不得为空或包含
 
 `usage=null` 表示未获得完整用量，不是零 Token。获得完整用量时 input/output/total 为非负整数且总数必须相加一致。错误审计必须有 error_code，成功或取消审计不带 error_code；普通原始响应不进入审计类型。
 
+### M2 真实评测身份与审计
+
+普通 `analyze_m2` 仍允许 `request.model.revision=null`；真实评测使用独立入口 `analyze_m2_real_evaluation`。它先调用无模型调用的 `preflight_real_evaluation`，核对请求与 `VersionedModelGateway.identity` 的非空 model/revision 一致，并要求文本和结构化输出能力，返回不可变的 `FrozenModelIdentity`。具体 provider SDK 尚未实现；端口本身不证明 provider 版本可信，宿主适配器必须提供可核验身份。
+
+调用前稳定错误码为 `requested_revision_required`、`gateway_revision_required`、`gateway_model_mismatch`、`gateway_revision_mismatch` 和 `gateway_capability_unsupported`；这些准入失败抛出 `RealEvaluationPreflightError`，不会调用模型。批次和调用时的能力硬限、预算检查仍由原有执行路径负责；preflight 不检查累计 `max_input_tokens` 与每次上下文能力的兼容性，这两个上限也不是同一概念。
+
+每次实际响应（含结构修复和聚类合并）须与冻结身份完全一致；空 actual revision 产生 `model_identity_unverifiable`，名称或 revision 不一致产生 `model_identity_mismatch`。这些错误不会重试、解析为成功内容或缓存失败阶段；已发生调用的用量按原有规则结算并保留审计。实际 revision 必须来自 provider 可验证的返回值，不得回填请求值。
+
+| 新审计字段 | 含义与 null 语义 |
+|---|---|
+| `requested_model_name` | 该次调用请求的模型名称；旧记录缺失时默认为 null |
+| `requested_revision` | 该次调用请求的 revision；普通模式允许 null，旧记录缺失时默认为 null |
+| `actual_model_name` | 响应实际模型名称；未收到响应时为 null，旧记录缺失时默认为 null |
+| `actual_revision` | 响应实际 revision；未收到响应或 provider 未提供时为 null，旧记录缺失时默认为 null |
+
+原 `model_name` 字段继续保留：收到响应时为响应名称，否则为请求名称。新四字段使请求和响应身份可以分开审查；不能根据旧记录的 null 推断当时已执行身份验证。新增 [合成审计样例](../../packages/agent/tests/fixtures/valid/result-identity-audit.json) 可通过标准 Schema 和 Pydantic 校验及 JSON 往返。
+
+阶段缓存键绑定模型名称、冻结 revision 和 `identity_verification_required` 模式；普通模式与正式模式互不复用缓存。正式重放命中缓存时不会产生新调用审计，缓存来自此前通过验证的同一身份阶段。
+
+同步网关的取消仅在调用边界前后被观察，不能中断在途 provider 请求。preflight 不读取密钥、不授权付费调用，也不承诺货币上限或准确 Token 估算；真实模型调用和费用仍需另行授权。
+
 ## 4. AnalysisResult 与 outcome
 
 结果封装包含线协议版本、运行/分析 ID、平台/视频 ID、已完成步骤、领域分析数组和非空 outcomes 数组。每个 outcome 通过 status 判别，不能把其他类别的负载混入。
@@ -106,3 +127,5 @@ M1 只生成独立的 `ConsensusDecision`，尚未编排完整 `AnalysisResult`�
 字段关系错误的位置可能是所属对象根节点，code 给出具体违反的规则。标准 JSON Schema 不表达所有跨字段关系，消费方仍应使用本库校验或实现同等关系规则。
 
 未知版本拒绝，不静默升级；新增字段或收紧合法负载约束时审查兼容性并更新版本、导出 Schema 和 fixtures。实际持久化与采集接入双方尚须执行契约测试，不能把本地 Schema 初版视为已经联调完成。
+
+本轮按已批准的设计暂保 `schema_version=1.0`，为审计添加四个默认 null 的可选字段。新消费者能够读取缺少这些字段的旧记录；但旧消费者使用 `extra_forbidden`，不能读取包含新字段的新审计，包含显式 null 也一样。因此不是双向兼容，消费方须更新对应契约和 Schema 后再接收新审计；宿主接入前仍需完成兼容性联调。
