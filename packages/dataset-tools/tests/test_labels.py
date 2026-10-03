@@ -581,6 +581,25 @@ def test_export_path_guard_oserror_uses_safe_code(
     assert not (tmp_path / ".fresh.staging").exists()
 
 
+def test_export_input_directory_check_oserror_uses_safe_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    sanitized = tmp_path / "sanitized"
+    is_dir = Path.is_dir
+
+    def fail_is_dir(path: Path) -> bool:
+        if path == sanitized:
+            raise PermissionError("SYNTHETIC_PRIVATE_PATH")
+        return is_dir(path)
+
+    monkeypatch.setattr(Path, "is_dir", fail_is_dir)
+    with pytest.raises(LabelValidationError, match="^label_path_invalid$"):
+        export_labels(sanitized, tmp_path / "fresh")
+    assert not (tmp_path / "fresh").exists()
+    assert not (tmp_path / ".fresh.staging").exists()
+
+
 def test_duplicate_comments_and_cross_video_clusters_are_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

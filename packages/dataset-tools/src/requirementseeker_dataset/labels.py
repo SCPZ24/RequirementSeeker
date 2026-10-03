@@ -170,9 +170,9 @@ def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
 
     staging = output_root.with_name(f".{output_root.name}.staging")
     _check_label_output(output_root)
-    if not sanitized_root.is_dir():
-        raise LabelValidationError("label_path_invalid")
     try:
+        if not sanitized_root.is_dir():
+            raise LabelValidationError("label_path_invalid")
         _require_local_tree(sanitized_root)
         manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
     except OSError:
