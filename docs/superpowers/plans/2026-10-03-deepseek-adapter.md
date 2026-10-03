@@ -96,7 +96,7 @@ gateway = DeepSeekModelGateway(api_key=api_key, max_input_tokens_per_call=16000)
 assert gateway.identity.model_revision is None
 ```
 
-- [x] 说明 provider_system_fingerprint 与实际 revision/响应摘要不同，新消费者读旧审计但严格旧消费者需更新 Schema；实际模型身份可读取不等于正式版本冻结，DeepSeek 正式入口当前零调用拒绝。24/24 仅结构可评测，issue #8 独立待修。
+- [x] 说明 provider_system_fingerprint 与实际 revision/响应摘要不同，新消费者读旧审计但严格旧消费者需更新 Schema；实际模型身份可读取不等于正式版本冻结，DeepSeek 正式入口当前零调用拒绝。24/24 仅结构可评测；实施时 issue #8 独立待修，发布前已由独立 PR #9 修复并集成，未刷新真实标签。
 - [x] 完整验证：
 
 ```sh

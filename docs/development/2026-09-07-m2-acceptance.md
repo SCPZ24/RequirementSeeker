@@ -113,3 +113,11 @@ Schema RED 实测为 1 failed、3 passed，失败位置是 result Schema 与权�
 | `uv build --offline --project packages/agent` | 生成 0.3.0 sdist 与 wheel |
 
 上述测试使用离线传输替身，没有真实 provider 兼容性测试。本轮没有读取真实凭据、调用真实模型或产生模型费用，也未验证真实语义指标，不宣称 H0、H1 或生产就绪。24/24 仍只是结构准入计数；`export-labels` 的 upstream issue #8 必须单独修复后再刷新标签快照，本轮未改标签。
+
+## 2026-10-03 发布前集成复核
+
+上述各节保留实施时的历史状态。`export-labels` 已通过独立 PR #9 合并至 upstream/main（`84b059a`），issue #8 已关闭；该修复已集成本分支，但未再次运行真实标签刷新流程。
+
+集成后重新执行离线门禁：Agent 354 项、Dataset 199 项、集成测试 3 项全部通过；两包 Ruff、格式检查、mypy 和离线构建通过。发布前独立审查另外执行核心定向测试 157 项及 24 个合成边界组合、适配器定向测试 123 项及 22 个合成安全检查，未发现阻断问题。这些是本地检查，不代表远端 CI 或真实 provider 评测。
+
+DeepSeek 的实际 revision 仍为 `None`，正式评测继续 fail closed；代码发布不授权真实调用、费用或标签刷新，24/24 仍只能描述为结构可评测。
