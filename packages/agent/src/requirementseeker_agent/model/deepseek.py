@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from http.client import HTTPException
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -149,6 +149,15 @@ class DeepSeekModelGateway:
             reason = choice["finish_reason"]
             if not isinstance(content, str) or not isinstance(reason, str):
                 raise ValueError
+            normalized_reason: Literal["stop", "length", "content_filter", "unknown"]
+            if reason == "stop":
+                normalized_reason = "stop"
+            elif reason == "length":
+                normalized_reason = "length"
+            elif reason == "content_filter":
+                normalized_reason = "content_filter"
+            else:
+                normalized_reason = "unknown"
             fingerprint = data.get("system_fingerprint")
             if fingerprint is not None:
                 fingerprint = _IDENTIFIER.validate_python(fingerprint)
@@ -166,9 +175,7 @@ class DeepSeekModelGateway:
                 payload=content,
                 model_name=name,
                 model_revision=None,
-                finish_reason=reason
-                if reason in {"stop", "length", "content_filter"}
-                else "unknown",
+                finish_reason=normalized_reason,
                 usage=usage,
                 response_fingerprint=hashlib.sha256(raw).hexdigest(),
                 provider_system_fingerprint=fingerprint,
