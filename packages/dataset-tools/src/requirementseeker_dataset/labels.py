@@ -99,14 +99,14 @@ def _require_output_path(path: Path) -> None:
         for part in (path, *path.parents):
             if _is_path_redirect(part) or (part != path and part.exists() and not part.is_dir()):
                 raise LabelValidationError("label_output_path_invalid")
-    except OSError:
+    except (OSError, ValueError):
         raise LabelValidationError("label_output_path_invalid") from None
 
 
 def _require_export_input(path: Path, root: Path) -> None:
     try:
         _require_local_path(path, root)
-    except OSError:
+    except (OSError, ValueError):
         raise LabelValidationError("label_path_invalid") from None
 
 

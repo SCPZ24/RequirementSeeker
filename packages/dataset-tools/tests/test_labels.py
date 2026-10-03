@@ -600,6 +600,21 @@ def test_export_input_directory_check_oserror_uses_safe_code(
     assert not (tmp_path / ".fresh.staging").exists()
 
 
+@pytest.mark.parametrize("location", ["input", "output"])
+def test_export_embedded_null_path_uses_safe_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    invalid = tmp_path / f"synthetic{chr(0)}{location}"
+    sanitized = invalid if location == "input" else tmp_path / "sanitized"
+    output = invalid if location == "output" else tmp_path / "fresh"
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+    code = "label_path_invalid" if location == "input" else "label_output_path_invalid"
+    with pytest.raises(LabelValidationError, match=f"^{code}$"):
+        export_labels(sanitized, output)
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+
+
 def test_duplicate_comments_and_cross_video_clusters_are_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
