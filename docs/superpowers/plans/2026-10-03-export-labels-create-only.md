@@ -106,11 +106,11 @@ Task 2 证据：`5e9eaea` 仅新增18项测试，全部直接GREEN（真实renam
 
 文件：`packages/dataset-tools/tests/test_cli.py`、`packages/dataset-tools/src/requirementseeker_dataset/cli.py`（仅若测试证明必要）、`packages/dataset-tools/README.md`、`docs/superpowers/plans/2026-09-25-m2-local-data-refresh.md`。
 
-- [ ] CLI 测试固定错误 JSON 和 exit2，不含合成路径/正文/秘密；backup/stage 不恢复不清理，失败 stage 保留；不支持平台在零写入下失败。API/参数无新 flag，成功摘要维持原格式。
-- [ ] README 区分 sanitize 的旧 UUID/恢复语义和 export-labels 新默认create-only，不改变 sanitizer。描述固定stage/旧UUID阻断、Windows限定、失败不自动清理及威胁模型，不建议删除真实标注或备份。
-- [ ] 刷新计划只更新预检查和失败策略：检查固定 `.labels-v2.staging`、旧 `.labels-v2.staging.*`、backup 和文件/重定向形式冲突；保持历史结果，写明不能把旧24个标注当成可覆盖模板。不能运行文档中的真实命令。
-- [ ] 新 CLI 缺口先 RED 再实现；已存在正确输出可作为直接 GREEN 回归，记录区别。文档规格/质量审通过。
-- [ ] 主代理运行：
+- [x] CLI 测试固定错误 JSON 和 exit2，不含合成路径/正文/秘密；backup/stage 不恢复不清理，失败 stage 保留；不支持平台在零写入下失败。API/参数无新 flag，成功摘要维持原格式。
+- [x] README 区分 sanitize 的旧 UUID/恢复语义和 export-labels 新默认create-only，不改变 sanitizer。描述固定stage/旧UUID阻断、Windows限定、失败不自动清理及威胁模型，不建议删除真实标注或备份。
+- [x] 刷新计划只更新预检查和失败策略：检查固定 `.labels-v2.staging`、旧 `.labels-v2.staging.*`、backup 和文件/重定向形式冲突；保持历史结果，写明不能把旧24个标注当成可覆盖模板。不能运行文档中的真实命令。
+- [x] 新 CLI 缺口先 RED 再实现；已存在正确输出可作为直接 GREEN 回归，记录区别。文档规格/质量审通过。
+- [x] 主代理运行：
 
 ```sh
 uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests -q
@@ -122,6 +122,10 @@ git diff --check 98bdf81..HEAD
 ```
 
 运行已有 `tests/integration` 回归的确切位置先用 `rg --files` 确认；按其现有依赖配置执行，不引入新集成基础设施。
+
+Task 3 证据：`1427dde` 新增15项CLI回归、更新README/历史刷新计划，cli.py无需修改。20CLI/完整188 passed、0skip，含3实际junction；首轮14失败为测试辅助误取无video_id字段，修正后直接GREEN，不算产品RED。规格/质量双审独立20 passed且无问题，9 PowerShell块AST0错误。额外隔离synthetic helper运行被环境自动策略拒绝，未得运行证据，未绕过重试；不能将AST解析称为运行安全证明。
+
+主代理于1427dde独立全门禁：188 passed（15.27s）、跨包JSON集成3 passed（0.81s）、Ruff、18文件格式、9源码 strict mypy、离线sdist/wheel0.1.0、基线98bdf81..HEAD diff check均通过。根main d4858f1和DeepSeek分支1eb2426未变，工作树干净；真实标签、凭据、模型及文档真实命令未访问或执行。最终总审进行中。
 
 - [ ] 提交 `docs(dataset): document label export transaction safety`，新独立代理总审设计/实现及所有失败所有权边界，修复阻断并重跑门禁。
 - [ ] 更新根忽略的 HANDOFF 和当日执行日志，记录实际计数/skip及未验证平台。保留分支/工作树，不推送、建PR、合并、关闭issue或刷新标签。
