@@ -12,6 +12,7 @@
 - `export-labels` 默认且仅支持 create-only，不增加模式开关，只在 Windows 上发布全新标注根；其他平台在创建输出或 staging 前拒绝。已有目标、同级 `.<output-name>.backup`、固定 `.<output-name>.staging` 或旧 `.<output-name>.staging.<id>` 条目都会阻断导出，文件和目录均不能覆盖；观测到路径或祖先的 symlink/junction/reparse 跳转也会拒绝，包括断链。
 - 标注导出独占固定 `.<output-name>.staging`，写入或发布失败会保留该目录及已经写入的内容。它不恢复 backup、不清理任何事务条目；再次运行会失败。操作者须先独立检查并决定如何保留或转移失败材料，不能凭错误码删除人工标注或 backup。staging 可能包含脱敏正文，不得上传或提交 Git。
 - 固定 staging 的互斥适用于遵守契约的并发调用；Windows rename 拒绝替换最终目标。路径检查拒绝观测到的跳转，但不保证抵御同权限恶意进程在任意系统调用之间替换祖先目录。
+- 输出路径组件不能以点或空格结尾（正常祖先 `..` 相对语法除外）；Windows 可能归一这些名字，造成目标和事务名不一致，因此在写入前以 `label_output_path_invalid` 拒绝，不隐式改名。
 
 ## 命令
 

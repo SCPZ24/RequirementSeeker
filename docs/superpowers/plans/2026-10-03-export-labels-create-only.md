@@ -129,3 +129,5 @@ Task 3 证据：`1427dde` 新增15项CLI回归、更新README/历史刷新计划
 
 - [ ] 提交 `docs(dataset): document label export transaction safety`，新独立代理总审设计/实现及所有失败所有权边界，修复阻断并重跑门禁。
 - [ ] 更新根忽略的 HANDOFF 和当日执行日志，记录实际计数/skip及未验证平台。保留分支/工作树，不推送、建PR、合并、关闭issue或刷新标签。
+
+最终总审修正：原1427dde门禁虽188 passed，但发现Windows尾点/尾空格目标按原始名字检查事务、发布时归一成另一目标，6项backup/fixed/legacy组合非法成功；尾空格返回路径不可读。`c87011f` 最小入口拒绝歧义输出组件；完整组RED10 failed/64 passed→GREEN74，保留正常祖先 `..` 语法；完整199 passed、集成3 passed、Ruff/18格式/9源码 strict mypy/diff check通过。等待主代理全门禁与原总审复验，不能沿用原188项总审通过结论。

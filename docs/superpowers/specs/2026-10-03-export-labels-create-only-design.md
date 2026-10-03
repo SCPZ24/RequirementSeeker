@@ -24,6 +24,7 @@
 - 目标存在（文件、空目录或非空目录）报 `label_output_already_exists`，不改变其内容。
 - 同级 backup、固定 staging 或旧 staging 前缀条目存在时报 `label_output_transaction_already_exists`，保留全部条目，不恢复、不删除。
 - 检测到输入、输出、staging、backup 或其祖先路径的 symlink/junction/reparse 跳转时关闭式拒绝；输出路径错误报 `label_output_path_invalid`，输入错误沿用安全来源错误码。
+- Windows 会将部分尾点/尾空格名字归一为另一目标。输出路径组件有这类歧义时在写入前以 `label_output_path_invalid` 拒绝，保证目标和事务名称使用同一身份；普通祖先 `..` 相对路径语法不因此误拒绝。这是最终总审发现的事务别名漏口修正，不添加隐式规范化或模式开关。
 - 保留现有输入与输出必须分离、模板不能语义预填、采样清单/评论顺序匹配等验证，不扩展标注字段或更改评测参考标准。
 - CLI 失败仍只输出固定 ASCII 错误码，exit 2；不输出正文、评论/视频标识、绝对路径或 staging 内容。成功摘要保持原格式。
 - 写入或发布的 OSError 转为固定错误码，不能把底层带路径异常回显。发布失败使用 `label_output_commit_failed`；非发布写入失败使用 `label_output_write_failed`。
