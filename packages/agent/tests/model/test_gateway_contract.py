@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from requirementseeker_agent.model import (
     ControlledContentBlock,
     ModelCallRequest,
+    ModelCallResponse,
     ModelGateway,
     ModelGatewayError,
     ScenarioModelGateway,
@@ -58,6 +59,20 @@ def assert_gateway_conformance(gateway: ModelGateway) -> None:
 
 def test_scenario_gateway_satisfies_shared_contract() -> None:
     assert_gateway_conformance(ScenarioModelGateway())
+
+
+@pytest.mark.parametrize("fingerprint", [None, "fp_backend_1"])
+def test_response_provider_fingerprint_is_optional_and_round_trips(fingerprint: str | None) -> None:
+    data = ScenarioModelGateway().invoke(make_call("valid_signals")).model_dump(mode="json")
+    data.pop("provider_system_fingerprint", None)
+    old_response = ModelCallResponse.model_validate(data)
+    assert old_response.provider_system_fingerprint is None
+    data["provider_system_fingerprint"] = fingerprint
+    response = ModelCallResponse.model_validate(data)
+    assert response.provider_system_fingerprint == fingerprint
+    assert ModelCallResponse.model_validate_json(response.model_dump_json()) == response
+    assert response.model_revision == old_response.model_revision
+    assert response.response_fingerprint == old_response.response_fingerprint
 
 
 def test_call_request_rejects_secret_fields() -> None:

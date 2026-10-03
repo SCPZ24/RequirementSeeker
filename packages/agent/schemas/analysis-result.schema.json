@@ -447,6 +447,21 @@
           "default": null,
           "title": "Actual Revision"
         },
+        "provider_system_fingerprint": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider System Fingerprint"
+        },
         "versions": {
           "$ref": "#/$defs/Versions"
         },

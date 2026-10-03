@@ -108,6 +108,9 @@ def _audit(
         requested_revision=call.model_revision,
         actual_model_name=None if response is None else response.model_name,
         actual_revision=None if response is None else response.model_revision,
+        provider_system_fingerprint=(
+            None if response is None else response.provider_system_fingerprint
+        ),
         versions=request.versions,
         input_hash=_input_hash(call),
         step=call.stage,

@@ -89,6 +89,7 @@ class ModelCallResponse(Contract):
     finish_reason: Literal["stop", "length", "content_filter", "unknown"]
     usage: TokenUsage | None
     response_fingerprint: Hash
+    provider_system_fingerprint: Identifier | None = None
 
 
 class ModelGatewayError(RuntimeError):

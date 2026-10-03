@@ -146,6 +146,7 @@ class ModelInvocationAudit(Contract):
     requested_revision: Identifier | None = None
     actual_model_name: Identifier | None = None
     actual_revision: Identifier | None = None
+    provider_system_fingerprint: Identifier | None = None
     versions: Versions
     input_hash: Hash
     step: Step

@@ -61,6 +61,7 @@ def response(payload: object, *, usage: TokenUsage | None = DEFAULT_USAGE) -> Mo
         finish_reason="stop",
         usage=usage,
         response_fingerprint="0" * 64,
+        provider_system_fingerprint="fp_backend_1",
     )
 
 
@@ -121,11 +122,13 @@ def test_transport_error_is_retried_and_every_attempt_is_audited() -> None:
     assert failed.requested_revision is None
     assert failed.actual_model_name is None
     assert failed.actual_revision is None
+    assert failed.provider_system_fingerprint is None
     assert succeeded.model_name == "scenario-model"
     assert succeeded.requested_model_name == "synthetic-model"
     assert succeeded.requested_revision is None
     assert succeeded.actual_model_name == "scenario-model"
     assert succeeded.actual_revision == "m2-fixture-1"
+    assert succeeded.provider_system_fingerprint == "fp_backend_1"
 
 
 def test_success_audit_keeps_missing_actual_revision_without_requested_fallback() -> None:
@@ -186,6 +189,8 @@ def test_frozen_identity_checks_actual_response_after_settlement(
     assert audits[0].requested_revision == call.model_revision
     assert audits[0].actual_model_name == actual_name
     assert audits[0].actual_revision == actual_revision
+    assert audits[0].provider_system_fingerprint == "fp_backend_1"
+    assert reply.response_fingerprint == "0" * 64
     assert audits[0].usage == DEFAULT_USAGE
     snapshot = budget.snapshot()
     assert snapshot.model_calls_consumed == 1
@@ -261,6 +266,7 @@ def test_budget_exceeded_retains_identity_error_and_actual_usage(
     assert audit.requested_revision == frozen.model_revision
     assert audit.actual_model_name == actual_name
     assert audit.actual_revision == actual_revision
+    assert audit.provider_system_fingerprint == "fp_backend_1"
     assert audit.usage == usage
     assert budget.snapshot().input_tokens_consumed == 20
     assert budget.snapshot().output_tokens_consumed == 20
@@ -279,6 +285,7 @@ def test_fatal_error_is_not_retried(code: GatewayErrorCode) -> None:
     assert raised.value.retryable is False
     assert len(raised.value.audits) == 1
     assert len(gateway.calls) == 1
+    assert raised.value.audits[0].provider_system_fingerprint is None
 
 
 def test_transport_retry_limit_is_enforced() -> None:
@@ -406,3 +413,4 @@ def test_cancellation_after_response_creates_cancelled_audit() -> None:
     assert audit.requested_revision is None
     assert audit.actual_model_name == "scenario-model"
     assert audit.actual_revision == "m2-fixture-1"
+    assert audit.provider_system_fingerprint == "fp_backend_1"

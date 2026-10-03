@@ -19,6 +19,7 @@
       "requested_revision": "m2-fixture-1",
       "actual_model_name": "scenario-model",
       "actual_revision": "m2-fixture-1",
+      "provider_system_fingerprint": "fp_backend_1",
       "versions": {"rules": "1", "prompts": "1", "schema": "1.0"},
       "input_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "step": "signals",
