@@ -14,7 +14,7 @@
 
 文件：`packages/dataset-tools/src/requirementseeker_dataset/labels.py`；`packages/dataset-tools/tests/test_labels.py`。
 
-- [ ] 在旧两个测试原位改为新行为断言，并增加事务失败用例。不使用 `-x`，完整运行新行为组，记录具体失败原因。
+- [x] 在旧两个测试原位改为新行为断言，并增加事务失败用例。不使用 `-x`，完整运行新行为组，记录具体失败原因。
 
 ```python
 with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
@@ -25,8 +25,8 @@ assert (backup / relative_annotation).read_bytes() == original
 
 固定 `.labels.staging` 和 `.labels.staging.<id>` 均应拒绝，旧内容原样；任意人工标注保持字节不变。写入失败保留固定 stage，目标缺失；输入校验错误没有 stage；不支持的平台在零写入下失败。平台模拟仅 patch 本模块能力标志，不更改进程全局 os.name，避免影响 pathlib。
 
-- [ ] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_labels.py -q`，观察旧恢复/忽略 staging 与新用例实际 RED；原有验证/模板用例可保持 GREEN。
-- [ ] 实现以下固定事务检查（名称可按现有风格，但语义不可扩展），删除因本任务不再使用的 shutil/uuid 导入：
+- [x] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_labels.py -q`，观察旧恢复/忽略 staging 与新用例实际 RED；原有验证/模板用例可保持 GREEN。
+- [x] 实现以下固定事务检查（名称可按现有风格，但语义不可扩展），删除因本任务不再使用的 shutil/uuid 导入：
 
 ```python
 def _check_output_transaction(output: Path, *, owns_staging: bool = False) -> None:
@@ -48,8 +48,8 @@ def _check_output_transaction(output: Path, *, owns_staging: bool = False) -> No
 
 用调用层 OSError→固定错误码包装，不能回显路径。确保先拒绝空名字/根路径；按现有 Path 检查处理 resolve 的失败。
 
-- [ ] `export_labels` 保留现有 AnnotationFile 构造、相对路径及全部输入规则，但把遍历/读取/验证/构造移到 mkdir 前；在原始未 resolve 的输入路径上检查祖先跳转，在每个输入文件读取前再次检查。输出先检查原始路径再 resolve，保持输入/输出分离。
-- [ ] 固定 staging 取得与写入流程：
+- [x] `export_labels` 保留现有 AnnotationFile 构造、相对路径及全部输入规则，但把遍历/读取/验证/构造移到 mkdir 前；在原始未 resolve 的输入路径上检查祖先跳转，在每个输入文件读取前再次检查。输出先检查原始路径再 resolve，保持输入/输出分离。
+- [x] 固定 staging 取得与写入流程：
 
 ```python
 _check_output_transaction(output)
@@ -72,7 +72,7 @@ except OSError:
 
 不得添加清理 finally/except，不删除自己或别人 stage，不创建/移动 backup。`prepared` 在 mkdir 前由原有验证逻辑构造，包含相对路径和 AnnotationFile；返回 annotations/output_files 语义不变。输入跳转用现有 `_require_local_path`/`_require_local_tree`，输出跳转用输出安全码。
 
-- [ ] 修改发布，仅使用 Windows rename，平台能力在入口和发布均关闭式检查；目标出现仍报安全错误、保留两边内容：
+- [x] 修改发布，仅使用 Windows rename，平台能力在入口和发布均关闭式检查；目标出现仍报安全错误、保留两边内容：
 
 ```python
 if not _WINDOWS_CREATE_ONLY:
@@ -85,7 +85,9 @@ except OSError:
 
 `_WINDOWS_CREATE_ONLY = os.name == "nt"`，不新增 API 模式开关。发布前路径与冲突检查不替代 rename 的 no-replace 保障。
 
-- [ ] 原定向组及完整 Dataset Tools GREEN 后跑 Ruff/format/显式 strict mypy，提交 `fix(dataset): make label export create-only`。规格/质量双审通过；记录所有实际 RED/GREEN，包括原已存在行为的测试未失败，不夸大 TDD。
+- [x] 原定向组及完整 Dataset Tools GREEN 后跑 Ruff/format/显式 strict mypy，提交 `fix(dataset): make label export create-only`。规格/质量双审通过；记录所有实际 RED/GREEN，包括原已存在行为的测试未失败，不夸大 TDD。
+
+Task 1 证据：`e735126` 基础契约；初组 RED14/34，补守卫 RED19/34→GREEN53，安全码 RED7/53→GREEN60。规格审输入根权限异常 `c913f8c` RED1/60→GREEN61；质量审 NUL Path `32a9034` RED2/61→GREEN63。两项修复独立复审通过，完整155 passed、Ruff、17文件格式、9源码 strict mypy、diff check通过。已有目标文件/空目录行为原已正确，仅直接GREEN回归。
 
 ## Task 2：竞态和路径回归
 
