@@ -149,7 +149,11 @@ def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
 
     if not _WINDOWS_CREATE_ONLY:
         raise LabelValidationError("label_create_only_unsupported_platform")
-    if not output_root.name or output_root.name in (".", ".."):
+    if (
+        not output_root.name
+        or output_root.name in (".", "..")
+        or any(part != ".." and part.endswith((".", " ")) for part in output_root.parts)
+    ):
         raise LabelValidationError("label_output_path_invalid")
     _require_export_input(sanitized_root, sanitized_root)
     _require_output_path(output_root)

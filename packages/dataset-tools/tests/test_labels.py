@@ -767,3 +767,55 @@ def test_label_output_must_not_replace_sanitized_input(
     with pytest.raises(LabelValidationError, match="label_output_must_be_separate"):
         export_labels(sanitized, sanitized)
     assert result.output_files[0].is_file()
+
+
+@pytest.mark.parametrize("suffix", [".", " "])
+@pytest.mark.parametrize("transaction", ["backup", "staging", "staging.old"])
+def test_export_rejects_windows_alias_with_existing_transaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, transaction: str
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    marker = tmp_path / f".labels.{transaction}" / "manual.txt"
+    marker.parent.mkdir()
+    marker.write_bytes(b"manual transaction bytes")
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+
+    with pytest.raises(LabelValidationError, match="^label_output_path_invalid$"):
+        export_labels(tmp_path / "seed" / "sanitized", tmp_path / f"labels{suffix}")
+
+    assert marker.read_bytes() == b"manual transaction bytes"
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+    assert not (tmp_path / "labels").exists()
+
+
+@pytest.mark.parametrize("suffix", [".", " "])
+@pytest.mark.parametrize("component", ["output", "ancestor"])
+def test_export_rejects_windows_alias_before_any_output_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, component: str
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    output = (
+        tmp_path / f"labels{suffix}"
+        if component == "output"
+        else tmp_path / f"parent{suffix}" / "labels"
+    )
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+
+    with pytest.raises(LabelValidationError, match="^label_output_path_invalid$"):
+        export_labels(tmp_path / "seed" / "sanitized", output)
+
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+
+
+def test_export_accepts_parent_reference_in_output_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    child = tmp_path / "ordinary.parent"
+    child.mkdir()
+    output = child / ".." / "fresh"
+
+    result = export_labels(tmp_path / "seed" / "sanitized", output)
+
+    assert result.output_files[0].is_file()
+    assert result.output_files[0].is_relative_to(output)
