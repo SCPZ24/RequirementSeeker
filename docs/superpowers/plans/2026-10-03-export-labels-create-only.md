@@ -93,12 +93,14 @@ Task 1 证据：`e735126` 基础契约；初组 RED14/34，补守卫 RED19/34→
 
 文件：新 `packages/dataset-tools/tests/test_label_transactions.py`（复用现有合成 fixture，不能导入真实材料）；必要修正仅 `labels.py`。新源模块不增加。
 
-- [ ] Windows 真实 rename 新目标成功，以及最后检查后目标出现：注入 `Path.rename` 包装，先在目标写入合成哨兵，再调用原 rename；分别测试目标文件、空目录、人工标注目录。检查目标摘要不变，固定 stage 保留，API 只抛安全错误。
-- [ ] 使用 Event 有界等待进行并发测试：第一调用取得 stage 后暂停，第二调用拒绝且不能写入/删除 stage，第一调用释放继续成功；另一用例模拟预检查过期，mkdir 前另一次调用已成功发布，随后重新检查拒绝写入。
-- [ ] 路径检查测试覆盖：输入根及祖先、输出祖先、backup/staging/legacy symlink 或 junction/reparse；读取或发布关键边界模拟出现跳转；能创建 junction 时做 Windows 实际测试，权限限制明确 skip，不把 skip 当通过。所有外部哨兵位于 pytest 临时目录。
-- [ ] 新测试先运行完整分组：已实现的不覆盖目标/并发行为可直接 GREEN 作为回归；若任何缺陷，记录 RED 并只增加最小检查修复。禁止为了取得 RED 撤回已通过的行为或测试被测对象替身。
-- [ ] 如出现输出路径失败误用来源码，按设计修正输出固定码；所有 OSError、权限、失败 mkdir/写入均需安全转换，其他事务不改动。
-- [ ] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_label_transactions.py packages/dataset-tools/tests/test_labels.py -q`，然后完整 Dataset Tools、Ruff/format/mypy；提交 `test(dataset): cover label transaction races`（若有修复，提交名称如实）。独立规格/质量双审。
+- [x] Windows 真实 rename 新目标成功，以及最后检查后目标出现：注入 `Path.rename` 包装，先在目标写入合成哨兵，再调用原 rename；分别测试目标文件、空目录、人工标注目录。检查目标摘要不变，固定 stage 保留，API 只抛安全错误。
+- [x] 使用 Event 有界等待进行并发测试：第一调用取得 stage 后暂停，第二调用拒绝且不能写入/删除 stage，第一调用释放继续成功；另一用例模拟预检查过期，mkdir 前另一次调用已成功发布，随后重新检查拒绝写入。
+- [x] 路径检查测试覆盖：输入根及祖先、输出祖先、backup/staging/legacy symlink 或 junction/reparse；读取或发布关键边界模拟出现跳转；能创建 junction 时做 Windows 实际测试，权限限制明确 skip，不把 skip 当通过。所有外部哨兵位于 pytest 临时目录。
+- [x] 新测试先运行完整分组：已实现的不覆盖目标/并发行为可直接 GREEN 作为回归；若任何缺陷，记录 RED 并只增加最小检查修复。禁止为了取得 RED 撤回已通过的行为或测试被测对象替身。
+- [x] 如出现输出路径失败误用来源码，按设计修正输出固定码；所有 OSError、权限、失败 mkdir/写入均需安全转换，其他事务不改动。
+- [x] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_label_transactions.py packages/dataset-tools/tests/test_labels.py -q`，然后完整 Dataset Tools、Ruff/format/mypy；提交 `test(dataset): cover label transaction races`（若有修复，提交名称如实）。独立规格/质量双审。
+
+Task 2 证据：`5e9eaea` 仅新增18项测试，全部直接GREEN（真实rename4、并发2、实际junction9且0skip、权限失败3），未改生产代码。首轮17/1失败来自递归mkdir的测试注入时机，修正后通过，不计产品RED。定向81/完整173 passed、Ruff/18文件格式/9源码 strict mypy/diff check通过，规格/质量双审独立81 passed且无问题；规格审额外三个独立进程并发复跑6/6通过。
 
 ## Task 3：CLI、文档及收尾
 
