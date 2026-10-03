@@ -173,5 +173,5 @@ class DeepSeekModelGateway:
                 response_fingerprint=hashlib.sha256(raw).hexdigest(),
                 provider_system_fingerprint=fingerprint,
             )
-        except (ValueError, TypeError, KeyError, UnicodeError, ValidationError):
+        except (ValueError, TypeError, KeyError, UnicodeError, ValidationError, RecursionError):
             raise ModelGatewayError("invalid_configuration", retryable=False) from None

@@ -472,3 +472,44 @@ def test_raw_invalid_output_retains_single_pipeline_repair(content):
     assert result.status == "retryable_error"
     assert result.error_code == "model_output_invalid"
     assert len(captured) == 2 and len(result.audits) == 2
+
+
+def deeply_nested_envelope():
+    # 直接构造供应商字节，避免测试构造阶段先触发 json.dumps 的递归限制。
+    return b'{"ignored":' + b"[" * 5000 + b"0" + b"]" * 5000 + b"}"
+
+
+def test_deeply_nested_provider_envelope_is_sanitized():
+    with pytest.raises(ModelGatewayError) as error:
+        gateway(lambda request, timeout: deeply_nested_envelope()).invoke(call())
+    assert (error.value.code, error.value.retryable) == ("invalid_configuration", False)
+    assert str(error.value) == "invalid_configuration"
+    assert error.value.__suppress_context__
+
+
+def test_nested_envelope_failure_preserves_invocation_audit_and_settlement():
+    from pipeline.test_invocation import ledger
+
+    from requirementseeker_agent.pipeline.invocation import InvocationFailure, invoke_model
+
+    captured = []
+
+    def transport(request, timeout):
+        captured.append(request)
+        return deeply_nested_envelope()
+
+    budget = ledger()
+    with pytest.raises(InvocationFailure) as error:
+        invoke_model(analysis_request(), call(), gateway(transport), budget, input_tokens=100)
+    assert error.value.code == "invalid_configuration"
+    assert error.value.retryable is False
+    assert len(captured) == 1 and len(error.value.audits) == 1
+    assert error.value.audits[0].status == "error"
+    assert error.value.audits[0].error_code == "invalid_configuration"
+    snapshot = budget.snapshot()
+    assert snapshot.model_calls_consumed == 1
+    assert snapshot.input_tokens_consumed == 100
+    assert snapshot.output_tokens_consumed == call().max_output_tokens
+    assert snapshot.model_calls_reserved == 0
+    assert snapshot.input_tokens_reserved == 0
+    assert snapshot.output_tokens_reserved == 0
