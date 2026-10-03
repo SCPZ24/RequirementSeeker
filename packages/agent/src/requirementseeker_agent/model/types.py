@@ -2,7 +2,7 @@
 
 from typing import Literal, Protocol
 
-from pydantic import Field, StrictBool
+from pydantic import ConfigDict, Field, StrictBool
 
 from ..contracts.analysis import TokenUsage
 from ..contracts.common import (
@@ -23,6 +23,8 @@ GatewayErrorCode = Literal[
     "authentication_failed",
     "cancelled",
     "invalid_configuration",
+    "model_identity_mismatch",
+    "model_identity_unverifiable",
 ]
 
 
@@ -33,6 +35,22 @@ class ModelCapabilities(Contract):
     supports_structured_output: StrictBool
     supports_images: StrictBool
     max_input_tokens_per_call: PositiveInt
+
+
+class ModelRuntimeIdentity(Contract):
+    """gateway 在付费调用前可提供的非秘密模型身份。"""
+
+    model_name: Identifier
+    model_revision: Identifier | None
+
+
+class FrozenModelIdentity(Contract):
+    """通过真实评测准入核对后的不可空模型身份。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    model_name: Identifier
+    model_revision: Identifier
 
 
 class ControlledContentBlock(Contract):
@@ -71,6 +89,7 @@ class ModelCallResponse(Contract):
     finish_reason: Literal["stop", "length", "content_filter", "unknown"]
     usage: TokenUsage | None
     response_fingerprint: Hash
+    provider_system_fingerprint: Identifier | None = None
 
 
 class ModelGatewayError(RuntimeError):
@@ -89,3 +108,10 @@ class ModelGateway(Protocol):
     def capabilities(self) -> ModelCapabilities: ...
 
     def invoke(self, request: ModelCallRequest) -> ModelCallResponse: ...
+
+
+class VersionedModelGateway(ModelGateway, Protocol):
+    """真实评测要求的可核验 gateway 端口。"""
+
+    @property
+    def identity(self) -> ModelRuntimeIdentity: ...

@@ -1,6 +1,12 @@
 {
   "cases": [
     {
+      "name": "result-identity-audit",
+      "kind": "result",
+      "path": "valid/result-identity-audit.json",
+      "valid": true
+    },
+    {
       "name": "request",
       "kind": "request",
       "path": "valid/request.json",

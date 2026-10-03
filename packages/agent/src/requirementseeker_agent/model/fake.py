@@ -11,6 +11,7 @@ from .types import (
     ModelCallResponse,
     ModelCapabilities,
     ModelGatewayError,
+    ModelRuntimeIdentity,
 )
 
 # 每个场景同时固定错误码和可重试性，避免测试依赖随机网络行为。
@@ -79,6 +80,13 @@ class ScenarioModelGateway:
             supports_structured_output=True,
             supports_images=False,
             max_input_tokens_per_call=4096,
+        )
+
+    @property
+    def identity(self) -> ModelRuntimeIdentity:
+        return ModelRuntimeIdentity(
+            model_name="scenario-model",
+            model_revision="m2-fixture-1",
         )
 
     def invoke(self, request: ModelCallRequest) -> ModelCallResponse:

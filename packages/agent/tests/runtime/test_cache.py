@@ -54,6 +54,17 @@ def test_cache_key_parts_reject_run_identity() -> None:
         CacheKeyParts.model_validate(data)
 
 
+def test_cache_keys_distinguish_model_name_and_revision() -> None:
+    first = parts(model_name="model-a")
+    assert cache_key(first) != cache_key(parts(model_name="model-b"))
+    assert cache_key(first) != cache_key(parts(model_name="model-a", model_revision="revision-2"))
+
+
+def test_cache_keys_distinguish_identity_validation_mode() -> None:
+    assert cache_key(parts()) == cache_key(parts(identity_verification_required=False))
+    assert cache_key(parts()) != cache_key(parts(identity_verification_required=True))
+
+
 def test_cache_reports_miss_then_hit_without_raw_response() -> None:
     cache = InMemorySemanticCache()
     key = cache_key(parts())

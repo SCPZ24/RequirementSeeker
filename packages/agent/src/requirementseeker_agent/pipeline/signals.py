@@ -12,7 +12,12 @@ from pydantic import StrictBool, ValidationError, model_validator
 from ..contracts.analysis import ModelInvocationAudit, NeedSignal
 from ..contracts.common import Contract, Identifier, Text
 from ..contracts.requests import AnalysisRequest, Comment
-from ..model.types import ControlledContentBlock, ModelCallRequest, ModelGateway
+from ..model.types import (
+    ControlledContentBlock,
+    FrozenModelIdentity,
+    ModelCallRequest,
+    ModelGateway,
+)
 from ..runtime.budget import BudgetLedger
 from .batching import CommentBatch, estimate_text_tokens
 from .invocation import (
@@ -168,7 +173,11 @@ def _call_request(
 
 
 def _validate_payload(payload: object, allowed_ids: frozenset[str]) -> tuple[NeedSignal, ...]:
-    parsed = SignalPayload.model_validate(payload)
+    parsed = (
+        SignalPayload.model_validate_json(payload)
+        if isinstance(payload, str)
+        else SignalPayload.model_validate(payload)
+    )
     if any(signal.comment_id not in allowed_ids for signal in parsed.signals):
         raise ValueError("signal_comment_not_in_current_batch")
 
@@ -216,6 +225,7 @@ def extract_signals(
     cancellation_probe: CancellationProbe = lambda: False,
     timeout_seconds: int = 30,
     scenario_id: str | None = None,
+    frozen_identity: FrozenModelIdentity | None = None,
 ) -> SignalExtractionResult:
     """调用模型，最多修复一次输出，并只返回当前批次内的可信信号。"""
 
@@ -228,6 +238,13 @@ def extract_signals(
         timeout_seconds=timeout_seconds,
         scenario_id=scenario_id,
     )
+    if frozen_identity is not None:
+        call = call.model_copy(
+            update={
+                "model_name": frozen_identity.model_name,
+                "model_revision": frozen_identity.model_revision,
+            }
+        )
     allowed_ids = frozenset(batch.comment_ids)
     audits: tuple[ModelInvocationAudit, ...] = ()
     next_attempt = 1
@@ -260,6 +277,7 @@ def extract_signals(
                 input_tokens=input_tokens,
                 start_attempt=next_attempt,
                 cancellation_probe=cancellation_probe,
+                frozen_identity=frozen_identity,
             )
         except (InvocationFailure, InvocationCancelled, InvocationBudgetExceeded) as error:
             raise _prepend_audits(error, audits) from error

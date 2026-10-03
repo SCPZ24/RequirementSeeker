@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "run_id": "synthetic-identity-run",
+  "analysis_id": "synthetic-identity-analysis",
+  "platform": "bilibili",
+  "video_id": "synthetic-identity-video",
+  "completed_steps": ["signals"],
+  "signals": [],
+  "clusters": [],
+  "consensus_decisions": [],
+  "context_decisions": [],
+  "inference_steps": [],
+  "audits": [
+    {
+      "invocation_id": "synthetic-call-1",
+      "model_config_ref": "synthetic-local",
+      "model_name": "scenario-model",
+      "requested_model_name": "scenario-model",
+      "requested_revision": "m2-fixture-1",
+      "actual_model_name": "scenario-model",
+      "actual_revision": "m2-fixture-1",
+      "provider_system_fingerprint": "fp_backend_1",
+      "versions": {"rules": "1", "prompts": "1", "schema": "1.0"},
+      "input_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "step": "signals",
+      "attempt": 1,
+      "status": "success",
+      "usage": null,
+      "error_code": null
+    }
+  ],
+  "outcomes": [
+    {
+      "status": "rejected",
+      "cluster_id": null,
+      "reason_code": "no_valid_signals"
+    }
+  ]
+}

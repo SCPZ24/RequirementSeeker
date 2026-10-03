@@ -11,7 +11,8 @@ from .batching import (
     estimate_text_tokens,
     split_input_budget,
 )
-from .m2 import analyze_m2, ensure_sampling_inputs_match
+from .m2 import analyze_m2, analyze_m2_real_evaluation, ensure_sampling_inputs_match
+from .preflight import RealEvaluationPreflightError, preflight_real_evaluation
 from .types import CompletedStep, M2AnalysisResult, M2Status
 
 __all__ = [
@@ -25,6 +26,9 @@ __all__ = [
     "M2AnalysisResult",
     "M2Status",
     "analyze_m2",
+    "analyze_m2_real_evaluation",
+    "RealEvaluationPreflightError",
+    "preflight_real_evaluation",
     "ensure_sampling_inputs_match",
     "estimate_comment_tokens",
     "estimate_text_tokens",
