@@ -16,7 +16,7 @@ from .contracts import (
     SamplingManifest,
     TokenUsage,
 )
-from .model import FrozenModelIdentity, ScenarioModelGateway
+from .model import DeepSeekModelGateway, FrozenModelIdentity, ScenarioModelGateway
 from .pipeline import (
     M2AnalysisResult,
     RealEvaluationPreflightError,
@@ -32,6 +32,7 @@ __all__ = [
     "AnalysisResult",
     "ConsensusDecision",
     "ContextDecision",
+    "DeepSeekModelGateway",
     "InferenceStep",
     "ModelInvocationAudit",
     "NeedCluster",

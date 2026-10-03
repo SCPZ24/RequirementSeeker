@@ -173,7 +173,11 @@ def _call_request(
 
 
 def _validate_payload(payload: object, allowed_ids: frozenset[str]) -> tuple[NeedSignal, ...]:
-    parsed = SignalPayload.model_validate(payload)
+    parsed = (
+        SignalPayload.model_validate_json(payload)
+        if isinstance(payload, str)
+        else SignalPayload.model_validate(payload)
+    )
     if any(signal.comment_id not in allowed_ids for signal in parsed.signals):
         raise ValueError("signal_comment_not_in_current_batch")
 

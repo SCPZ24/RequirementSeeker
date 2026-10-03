@@ -236,7 +236,11 @@ def _validate_payload(
     payload: object,
     nodes: tuple[_MergeNode, ...],
 ) -> tuple[NeedCluster, ...]:
-    parsed = ClusterPayload.model_validate(payload)
+    parsed = (
+        ClusterPayload.model_validate_json(payload)
+        if isinstance(payload, str)
+        else ClusterPayload.model_validate(payload)
+    )
     allowed_comment_ids = frozenset(comment_id for node in nodes for comment_id in node.comment_ids)
     flattened = [comment_id for cluster in parsed.clusters for comment_id in cluster.comment_ids]
     # 完整层级必须精确覆盖输入；未知、遗漏或跨簇重复都整体拒绝。

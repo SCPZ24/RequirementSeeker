@@ -1,5 +1,6 @@
 """Model gateway port and deterministic offline adapter."""
 
+from .deepseek import DeepSeekModelGateway
 from .fake import ScenarioModelGateway
 from .types import (
     ControlledContentBlock,
@@ -17,6 +18,7 @@ from .types import (
 
 __all__ = [
     "ControlledContentBlock",
+    "DeepSeekModelGateway",
     "FrozenModelIdentity",
     "GatewayErrorCode",
     "GatewayStage",
