@@ -1,11 +1,10 @@
 """导出不含语义预填的人工标注材料，并验证独立标注与裁决。"""
 
 import json
+import os
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -20,6 +19,7 @@ from .contracts import (
 from .source import _is_path_redirect
 
 _RAW_IDENTIFIER = re.compile(r"(?i)^(?:raw[-_]|BV[0-9A-Za-z]|\d{15,})")
+_WINDOWS_CREATE_ONLY = os.name == "nt"
 
 
 class LabelValidationError(ValueError):
@@ -79,7 +79,9 @@ def _read_comments(path: Path) -> list[SanitizedComment]:
 
 
 def _write_annotation(path: Path, annotation: AnnotationFile) -> None:
+    _require_output_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _require_output_path(path)
     path.write_text(
         json.dumps(
             annotation.model_dump(mode="json"),
@@ -92,11 +94,52 @@ def _write_annotation(path: Path, annotation: AnnotationFile) -> None:
     )
 
 
-def _commit_label_root(staging: Path, output: Path) -> None:
-    if output.exists() or _is_path_redirect(output):
-        raise LabelValidationError("label_output_already_exists")
+def _require_output_path(path: Path) -> None:
     try:
-        staging.replace(output)
+        for part in (path, *path.parents):
+            if _is_path_redirect(part) or (part != path and part.exists() and not part.is_dir()):
+                raise LabelValidationError("label_output_path_invalid")
+    except OSError:
+        raise LabelValidationError("label_output_path_invalid") from None
+
+
+def _require_export_input(path: Path, root: Path) -> None:
+    try:
+        _require_local_path(path, root)
+    except OSError:
+        raise LabelValidationError("label_path_invalid") from None
+
+
+def _check_label_output(output: Path, *, own_staging: bool = False) -> None:
+    _require_output_path(output)
+    staging = output.with_name(f".{output.name}.staging")
+    backup = output.with_name(f".{output.name}.backup")
+    transactions = [backup] if own_staging else [backup, staging]
+    try:
+        if output.parent.exists():
+            transactions.extend(
+                path
+                for path in output.parent.iterdir()
+                if path.name.casefold().startswith(f".{output.name}.staging.".casefold())
+            )
+        for path in (staging, backup, *transactions):
+            _require_output_path(path)
+        if any(path.exists() for path in transactions):
+            raise LabelValidationError("label_output_transaction_already_exists")
+        if own_staging and not staging.is_dir():
+            raise LabelValidationError("label_output_path_invalid")
+        if output.exists():
+            raise LabelValidationError("label_output_already_exists")
+    except OSError:
+        raise LabelValidationError("label_output_path_invalid") from None
+
+
+def _commit_label_root(staging: Path, output: Path) -> None:
+    if not _WINDOWS_CREATE_ONLY:
+        raise LabelValidationError("label_create_only_unsupported_platform")
+    _check_label_output(output, own_staging=True)
+    try:
+        staging.rename(output)
     except OSError:
         raise LabelValidationError("label_output_commit_failed") from None
 
@@ -104,11 +147,20 @@ def _commit_label_root(staging: Path, output: Path) -> None:
 def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
     """为每个有效采样清单导出含脱敏正文的空白人工标注文件。"""
 
+    if not _WINDOWS_CREATE_ONLY:
+        raise LabelValidationError("label_create_only_unsupported_platform")
+    if not output_root.name or output_root.name in (".", ".."):
+        raise LabelValidationError("label_output_path_invalid")
+    _require_export_input(sanitized_root, sanitized_root)
+    _require_output_path(output_root)
     try:
         sanitized_resolved = sanitized_root.resolve(strict=True)
-        output_resolved = output_root.resolve(strict=False)
-    except OSError:
+    except (OSError, RuntimeError, ValueError):
         raise LabelValidationError("label_path_invalid") from None
+    try:
+        output_resolved = output_root.resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        raise LabelValidationError("label_output_path_invalid") from None
     if (
         sanitized_resolved == output_resolved
         or sanitized_resolved in output_resolved.parents
@@ -116,59 +168,62 @@ def export_labels(sanitized_root: Path, output_root: Path) -> LabelExportResult:
     ):
         raise LabelValidationError("label_output_must_be_separate")
 
-    staging = output_root.with_name(f".{output_root.name}.staging.{uuid4().hex}")
-    backup = output_root.with_name(f".{output_root.name}.backup")
-    if _is_path_redirect(output_root) or _is_path_redirect(backup):
-        raise LabelValidationError("label_output_path_invalid")
-    if backup.exists() and not output_root.exists():
-        if not backup.is_dir():
-            raise LabelValidationError("label_output_path_invalid")
-        try:
-            backup.replace(output_root)
-        except OSError:
-            raise LabelValidationError("label_output_recovery_failed") from None
-    if staging.exists() or _is_path_redirect(staging) or backup.exists():
-        raise LabelValidationError("label_output_path_invalid")
-    if output_root.exists():
-        raise LabelValidationError("label_output_already_exists")
-
-    manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
+    staging = output_root.with_name(f".{output_root.name}.staging")
+    _check_label_output(output_root)
+    if not sanitized_root.is_dir():
+        raise LabelValidationError("label_path_invalid")
+    try:
+        _require_local_tree(sanitized_root)
+        manifests = sorted(sanitized_root.rglob("sampling-manifest.json"))
+    except OSError:
+        raise LabelValidationError("label_path_invalid") from None
     if not manifests:
         raise LabelValidationError("sampling_manifest_missing")
     annotations: list[AnnotationFile] = []
     relative_outputs: list[Path] = []
+    for manifest_path in manifests:
+        _require_export_input(manifest_path, sanitized_root)
+        manifest = _read_sampling_manifest(manifest_path)
+        directory = manifest_path.parent
+        if directory.name != manifest.video_id:
+            raise LabelValidationError("sampling_manifest_directory_mismatch")
+        comments_path = directory / "comments.jsonl"
+        _require_export_input(comments_path, sanitized_root)
+        comments = _read_comments(comments_path)
+        comment_ids = [item.comment_id for item in comments]
+        if len(comment_ids) != len(set(comment_ids)):
+            raise LabelValidationError("duplicate_comment")
+        if comment_ids != manifest.candidate_comment_ids:
+            raise LabelValidationError("sampling_manifest_comment_mismatch")
+        annotation = AnnotationFile(
+            annotation_schema_version="1.0",
+            video_id=manifest.video_id,
+            annotator_id=None,
+            comments=[CommentLabel.unlabeled(item.comment_id, item.text) for item in comments],
+            clusters=[],
+            disputed=False,
+            dispute_reasons=[],
+            is_complete=False,
+        )
+        relative = Path(manifest.platform) / manifest.video_id / "annotation.json"
+        annotations.append(annotation)
+        relative_outputs.append(relative)
+
+    _check_label_output(output_root)
     try:
         staging.mkdir(parents=True)
-        for manifest_path in manifests:
-            manifest = _read_sampling_manifest(manifest_path)
-            directory = manifest_path.parent
-            if directory.name != manifest.video_id:
-                raise LabelValidationError("sampling_manifest_directory_mismatch")
-            comments = _read_comments(directory / "comments.jsonl")
-            comment_ids = [item.comment_id for item in comments]
-            if len(comment_ids) != len(set(comment_ids)):
-                raise LabelValidationError("duplicate_comment")
-            if comment_ids != manifest.candidate_comment_ids:
-                raise LabelValidationError("sampling_manifest_comment_mismatch")
-            annotation = AnnotationFile(
-                annotation_schema_version="1.0",
-                video_id=manifest.video_id,
-                annotator_id=None,
-                comments=[CommentLabel.unlabeled(item.comment_id, item.text) for item in comments],
-                clusters=[],
-                disputed=False,
-                dispute_reasons=[],
-                is_complete=False,
-            )
-            relative = Path(manifest.platform) / manifest.video_id / "annotation.json"
+    except FileExistsError:
+        raise LabelValidationError("label_output_transaction_already_exists") from None
+    except OSError:
+        raise LabelValidationError("label_output_write_failed") from None
+    _check_label_output(output_root, own_staging=True)
+    try:
+        for relative, annotation in zip(relative_outputs, annotations, strict=True):
+            _check_label_output(output_root, own_staging=True)
             _write_annotation(staging / relative, annotation)
-            annotations.append(annotation)
-            relative_outputs.append(relative)
-        _commit_label_root(staging, output_root)
-    except Exception:
-        if staging.exists() and not staging.is_symlink():
-            shutil.rmtree(staging, ignore_errors=True)
-        raise
+    except OSError:
+        raise LabelValidationError("label_output_write_failed") from None
+    _commit_label_root(staging, output_root)
 
     return LabelExportResult(
         annotations=tuple(annotations),
