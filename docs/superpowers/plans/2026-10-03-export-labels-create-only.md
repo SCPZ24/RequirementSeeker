@@ -1,0 +1,123 @@
+# Export Labels Create-only Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
+
+**Goal:** issue #8：只创建新标注根，不恢复 backup、不删除失败 staging，不覆盖任何既有目标。
+
+**Architecture:** Windows 非替换 rename 发布，固定同级 staging 独占；先校验全部输入，再取得 staging 并写入。保持 API/CLI 参数，补足路径检查和安全错误码。
+
+**Tech Stack:** Python 3.12、pathlib、Pydantic、pytest、Ruff、mypy、uv。
+
+工作目录：`C:/Users/Fantason/.codex/worktrees/export-labels-create-only/RequirementSeeker`，分支 `codex/export-labels-create-only`，基线 98bdf81，设计提交 932792a，Dataset Tools 基线126 passed。用户已确认书面设计并授权执行。全部 synthetic 临时目录；不读取 `.local-data`、凭据或真实标签，不运行刷新，不调用模型，不发布或关闭 issue。三个任务串行，规格审通过后质量审；发现问题先复现 RED，再修复。
+
+## Task 1：事务契约
+
+文件：`packages/dataset-tools/src/requirementseeker_dataset/labels.py`；`packages/dataset-tools/tests/test_labels.py`。
+
+- [ ] 在旧两个测试原位改为新行为断言，并增加事务失败用例。不使用 `-x`，完整运行新行为组，记录具体失败原因。
+
+```python
+with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
+    export_labels(sanitized, output)
+assert not output.exists()
+assert (backup / relative_annotation).read_bytes() == original
+```
+
+固定 `.labels.staging` 和 `.labels.staging.<id>` 均应拒绝，旧内容原样；任意人工标注保持字节不变。写入失败保留固定 stage，目标缺失；输入校验错误没有 stage；不支持的平台在零写入下失败。平台模拟仅 patch 本模块能力标志，不更改进程全局 os.name，避免影响 pathlib。
+
+- [ ] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_labels.py -q`，观察旧恢复/忽略 staging 与新用例实际 RED；原有验证/模板用例可保持 GREEN。
+- [ ] 实现以下固定事务检查（名称可按现有风格，但语义不可扩展），删除因本任务不再使用的 shutil/uuid 导入：
+
+```python
+def _check_output_transaction(output: Path, *, owns_staging: bool = False) -> None:
+    staging = output.with_name(f".{output.name}.staging")
+    backup = output.with_name(f".{output.name}.backup")
+    for path in (output, staging, backup):
+        for part in (path, *path.parents):
+            if _is_path_redirect(part):
+                raise LabelValidationError("label_output_path_invalid")
+    if output.exists():
+        raise LabelValidationError("label_output_already_exists")
+    if backup.exists() or (not owns_staging and staging.exists()):
+        raise LabelValidationError("label_output_transaction_already_exists")
+    if output.parent.exists():
+        prefix = f".{output.name}.staging.".casefold()
+        if any(path.name.casefold().startswith(prefix) for path in output.parent.iterdir()):
+            raise LabelValidationError("label_output_transaction_already_exists")
+```
+
+用调用层 OSError→固定错误码包装，不能回显路径。确保先拒绝空名字/根路径；按现有 Path 检查处理 resolve 的失败。
+
+- [ ] `export_labels` 保留现有 AnnotationFile 构造、相对路径及全部输入规则，但把遍历/读取/验证/构造移到 mkdir 前；在原始未 resolve 的输入路径上检查祖先跳转，在每个输入文件读取前再次检查。输出先检查原始路径再 resolve，保持输入/输出分离。
+- [ ] 固定 staging 取得与写入流程：
+
+```python
+_check_output_transaction(output)
+try:
+    staging.mkdir(parents=True)  # 不使用 exist_ok
+except FileExistsError:
+    raise LabelValidationError("label_output_transaction_already_exists") from None
+except OSError:
+    raise LabelValidationError("label_output_write_failed") from None
+try:
+    _check_output_transaction(output, owns_staging=True)
+    for relative, annotation in prepared:
+        _require_local_path(staging / relative, staging)
+        _write_annotation(staging / relative, annotation)
+    _check_output_transaction(output, owns_staging=True)
+    _commit_label_root(staging, output)
+except OSError:
+    raise LabelValidationError("label_output_write_failed") from None
+```
+
+不得添加清理 finally/except，不删除自己或别人 stage，不创建/移动 backup。`prepared` 在 mkdir 前由原有验证逻辑构造，包含相对路径和 AnnotationFile；返回 annotations/output_files 语义不变。输入跳转用现有 `_require_local_path`/`_require_local_tree`，输出跳转用输出安全码。
+
+- [ ] 修改发布，仅使用 Windows rename，平台能力在入口和发布均关闭式检查；目标出现仍报安全错误、保留两边内容：
+
+```python
+if not _WINDOWS_CREATE_ONLY:
+    raise LabelValidationError("label_create_only_unsupported_platform")
+try:
+    staging.rename(output)
+except OSError:
+    raise LabelValidationError("label_output_commit_failed") from None
+```
+
+`_WINDOWS_CREATE_ONLY = os.name == "nt"`，不新增 API 模式开关。发布前路径与冲突检查不替代 rename 的 no-replace 保障。
+
+- [ ] 原定向组及完整 Dataset Tools GREEN 后跑 Ruff/format/显式 strict mypy，提交 `fix(dataset): make label export create-only`。规格/质量双审通过；记录所有实际 RED/GREEN，包括原已存在行为的测试未失败，不夸大 TDD。
+
+## Task 2：竞态和路径回归
+
+文件：新 `packages/dataset-tools/tests/test_label_transactions.py`（复用现有合成 fixture，不能导入真实材料）；必要修正仅 `labels.py`。新源模块不增加。
+
+- [ ] Windows 真实 rename 新目标成功，以及最后检查后目标出现：注入 `Path.rename` 包装，先在目标写入合成哨兵，再调用原 rename；分别测试目标文件、空目录、人工标注目录。检查目标摘要不变，固定 stage 保留，API 只抛安全错误。
+- [ ] 使用 Event 有界等待进行并发测试：第一调用取得 stage 后暂停，第二调用拒绝且不能写入/删除 stage，第一调用释放继续成功；另一用例模拟预检查过期，mkdir 前另一次调用已成功发布，随后重新检查拒绝写入。
+- [ ] 路径检查测试覆盖：输入根及祖先、输出祖先、backup/staging/legacy symlink 或 junction/reparse；读取或发布关键边界模拟出现跳转；能创建 junction 时做 Windows 实际测试，权限限制明确 skip，不把 skip 当通过。所有外部哨兵位于 pytest 临时目录。
+- [ ] 新测试先运行完整分组：已实现的不覆盖目标/并发行为可直接 GREEN 作为回归；若任何缺陷，记录 RED 并只增加最小检查修复。禁止为了取得 RED 撤回已通过的行为或测试被测对象替身。
+- [ ] 如出现输出路径失败误用来源码，按设计修正输出固定码；所有 OSError、权限、失败 mkdir/写入均需安全转换，其他事务不改动。
+- [ ] Run `uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests/test_label_transactions.py packages/dataset-tools/tests/test_labels.py -q`，然后完整 Dataset Tools、Ruff/format/mypy；提交 `test(dataset): cover label transaction races`（若有修复，提交名称如实）。独立规格/质量双审。
+
+## Task 3：CLI、文档及收尾
+
+文件：`packages/dataset-tools/tests/test_cli.py`、`packages/dataset-tools/src/requirementseeker_dataset/cli.py`（仅若测试证明必要）、`packages/dataset-tools/README.md`、`docs/superpowers/plans/2026-09-25-m2-local-data-refresh.md`。
+
+- [ ] CLI 测试固定错误 JSON 和 exit2，不含合成路径/正文/秘密；backup/stage 不恢复不清理，失败 stage 保留；不支持平台在零写入下失败。API/参数无新 flag，成功摘要维持原格式。
+- [ ] README 区分 sanitize 的旧 UUID/恢复语义和 export-labels 新默认create-only，不改变 sanitizer。描述固定stage/旧UUID阻断、Windows限定、失败不自动清理及威胁模型，不建议删除真实标注或备份。
+- [ ] 刷新计划只更新预检查和失败策略：检查固定 `.labels-v2.staging`、旧 `.labels-v2.staging.*`、backup 和文件/重定向形式冲突；保持历史结果，写明不能把旧24个标注当成可覆盖模板。不能运行文档中的真实命令。
+- [ ] 新 CLI 缺口先 RED 再实现；已存在正确输出可作为直接 GREEN 回归，记录区别。文档规格/质量审通过。
+- [ ] 主代理运行：
+
+```sh
+uv run --offline --locked --project packages/dataset-tools pytest packages/dataset-tools/tests -q
+uv run --offline --locked --project packages/dataset-tools ruff check packages/dataset-tools/src packages/dataset-tools/tests
+uv run --offline --locked --project packages/dataset-tools ruff format --check packages/dataset-tools/src packages/dataset-tools/tests
+uv run --offline --locked --project packages/dataset-tools mypy --config-file packages/dataset-tools/pyproject.toml packages/dataset-tools/src
+uv build --offline --project packages/dataset-tools
+git diff --check 98bdf81..HEAD
+```
+
+运行已有 `tests/integration` 回归的确切位置先用 `rg --files` 确认；按其现有依赖配置执行，不引入新集成基础设施。
+
+- [ ] 提交 `docs(dataset): document label export transaction safety`，新独立代理总审设计/实现及所有失败所有权边界，修复阻断并重跑门禁。
+- [ ] 更新根忽略的 HANDOFF 和当日执行日志，记录实际计数/skip及未验证平台。保留分支/工作树，不推送、建PR、合并、关闭issue或刷新标签。
