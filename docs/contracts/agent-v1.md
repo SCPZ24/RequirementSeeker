@@ -72,7 +72,7 @@ JSON 使用 UTF-8，版本字段必填且为 `1.0`。标识不得为空或包含
 
 ### M2 真实评测身份与审计
 
-普通 `analyze_m2` 仍允许 `request.model.revision=null`；真实评测使用独立入口 `analyze_m2_real_evaluation`。它先调用无模型调用的 `preflight_real_evaluation`，核对请求与 `VersionedModelGateway.identity` 的非空 model/revision 一致，并要求文本和结构化输出能力，返回不可变的 `FrozenModelIdentity`。具体 provider SDK 尚未实现；端口本身不证明 provider 版本可信，宿主适配器必须提供可核验身份。
+普通 `analyze_m2` 仍允许 `request.model.revision=null`；真实评测使用独立入口 `analyze_m2_real_evaluation`。它先调用无模型调用的 `preflight_real_evaluation`，核对请求与 `VersionedModelGateway.identity` 的非空 model/revision 一致，并要求文本和结构化输出能力，返回不可变的 `FrozenModelIdentity`。标准库实现的 `DeepSeekModelGateway` 已交付，无需 provider SDK，但网关和实际响应 revision 均为 null，尚不能通过正式准入；端口本身不证明 provider 版本可信，宿主适配器必须提供可核验身份。
 
 调用前稳定错误码为 `requested_revision_required`、`gateway_revision_required`、`gateway_model_mismatch`、`gateway_revision_mismatch` 和 `gateway_capability_unsupported`；这些准入失败抛出 `RealEvaluationPreflightError`，不会调用模型。批次和调用时的能力硬限、预算检查仍由原有执行路径负责；preflight 不检查累计 `max_input_tokens` 与每次上下文能力的兼容性，这两个上限也不是同一概念。
 
@@ -86,8 +86,11 @@ preflight 从 gateway 身份取得独立快照后再核对，后续能力读取�
 | `requested_revision` | 该次调用请求的 revision；普通模式允许 null，旧记录缺失时默认为 null |
 | `actual_model_name` | 响应实际模型名称；未收到响应时为 null，旧记录缺失时默认为 null |
 | `actual_revision` | 响应实际 revision；未收到响应或 provider 未提供时为 null，旧记录缺失时默认为 null |
+| `provider_system_fingerprint` | 响应实际提供的可选后端标识；未提供或旧记录缺失时默认为 null，不代表模型 revision |
 
-原 `model_name` 字段继续保留：收到响应时为响应名称，否则为请求名称。新四字段使请求和响应身份可以分开审查；不能根据旧记录的 null 推断当时已执行身份验证。新增 [合成审计样例](../../packages/agent/tests/fixtures/valid/result-identity-audit.json) 可通过标准 Schema 和 Pydantic 校验及 JSON 往返。
+原 `model_name` 字段继续保留：收到响应时为响应名称，否则为请求名称。requested/actual 四字段使请求和响应身份可以分开审查；不能根据旧记录的 null 推断当时已执行身份验证。`provider_system_fingerprint` 从实际响应独立复制到审计，既不是不可变权重 revision，也不是本地原始响应 SHA-256 `response_fingerprint`，不能用于补填 `actual_revision`。新增 [合成审计样例](../../packages/agent/tests/fixtures/valid/result-identity-audit.json) 可通过标准 Schema 和 Pydantic 校验及 JSON 往返。
+
+DeepSeek 固定使用官方 `deepseek-flash` 别名和官方端点，支持文本与 JSON object 模式，不支持图像。JSON object 模式不保证 provider 执行本项目 Schema，阶段解析器仍校验结构与引用。该网关请求 revision 为 null 时，正式 preflight 抛出 `requested_revision_required`；请求任填非空 revision 时抛出 `gateway_revision_required`，均不发起 HTTP 请求。普通分析不能替代正式身份验证。
 
 阶段缓存键绑定模型名称、冻结 revision 和 `identity_verification_required` 模式；普通模式与正式模式互不复用缓存。正式重放命中缓存时不会产生新调用审计，缓存来自此前通过验证的同一身份阶段。
 
@@ -130,4 +133,4 @@ M1 只生成独立的 `ConsensusDecision`，尚未编排完整 `AnalysisResult`�
 
 未知版本拒绝，不静默升级；新增字段或收紧合法负载约束时审查兼容性并更新版本、导出 Schema 和 fixtures。实际持久化与采集接入双方尚须执行契约测试，不能把本地 Schema 初版视为已经联调完成。
 
-本轮按已批准的设计暂保 `schema_version=1.0`，为审计添加四个默认 null 的可选字段。新消费者能够读取缺少这些字段的旧记录；但旧消费者使用 `extra_forbidden`，不能读取包含新字段的新审计，包含显式 null 也一样。因此不是双向兼容，消费方须更新对应契约和 Schema 后再接收新审计；宿主接入前仍需完成兼容性联调。
+按已批准的设计暂保 `schema_version=1.0`，审计的 requested/actual 四字段及后续新增 `provider_system_fingerprint` 均为默认 null 的可选字段。新消费者能够读取缺少这些字段的旧记录；但旧消费者使用 `extra_forbidden`，不能读取包含新字段的新审计，包含显式 null 也一样。因此不是双向兼容，消费方须更新对应契约和 Schema 后再接收新审计；宿主接入前仍需完成兼容性联调。
