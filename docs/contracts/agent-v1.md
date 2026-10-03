@@ -78,6 +78,8 @@ JSON 使用 UTF-8，版本字段必填且为 `1.0`。标识不得为空或包含
 
 每次实际响应（含结构修复和聚类合并）须与冻结身份完全一致；空 actual revision 产生 `model_identity_unverifiable`，名称或 revision 不一致产生 `model_identity_mismatch`。这些错误不会重试、解析为成功内容或缓存失败阶段；已发生调用的用量按原有规则结算并保留审计。实际 revision 必须来自 provider 可验证的返回值，不得回填请求值。
 
+preflight 从 gateway 身份取得独立快照后再核对，后续能力读取或配置更新不能更改冻结值。响应同时违反身份和预算约束时，顶层仍优先报告预算结束，调用审计保留身份错误码、实际身份和实际用量。
+
 | 新审计字段 | 含义与 null 语义 |
 |---|---|
 | `requested_model_name` | 该次调用请求的模型名称；旧记录缺失时默认为 null |

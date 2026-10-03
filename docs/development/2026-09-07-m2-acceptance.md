@@ -72,11 +72,13 @@ wheel 已核对包含模型替身、M2 编排与结果类型，以及 `signal-v1
 
 Schema RED 实测为 1 failed、3 passed，失败位置是 result Schema 与权威 Pydantic 模型不相等；重新导出后与完整回归一同通过。新增演示子进程测试先以缺少 `audits` 的 `KeyError` 失败（1 failed、1 passed），然后实现 `--real-evaluation` 合成选项；Schema 与演示的定向 GREEN 为 6 passed。另以独立合成结果 fixture 锁定新审计 JSON 往返，旧审计缺失四字段时均默认为 null。结果 Schema 继续为 `1.0`：新消费者能读旧审计，但拒绝未知字段的旧消费者必须更新后才能读新审计，不能声称双向兼容。
 
-在隔离工作树、Windows PowerShell 7 下实际运行：
+最终总审还修复了两个组合边界：preflight 对可变 gateway 身份立即建立独立快照，防止能力读取期间更换未核对版本；当身份漂移同时触发用量超预算时，运行仍优先报告预算结束，但审计正确记录身份错误与实际用量。两项原始合成复现均经独立复审确认修复，无剩余阻断问题。
+
+在隔离工作树、Windows 下实际运行：
 
 | 检查 | 本轮实际结果 |
 |---|---|
-| `uv run --offline --locked --project packages/agent pytest packages/agent/tests -q` | 281 passed |
+| `uv run --offline --locked --project packages/agent pytest packages/agent/tests -q` | 285 passed |
 | Ruff check（全部 src/tests/examples） | 通过 |
 | Ruff format --check（全部 src/tests/examples） | 56 files already formatted |
 | mypy strict | 30 个源码文件无问题 |
@@ -86,4 +88,4 @@ Schema RED 实测为 1 failed、3 passed，失败位置是 result Schema 与权�
 
 这些检查只证明合成链路与身份契约。验收条件 7 当前是端口及响应身份契约就绪，具体 provider SDK 适配器尚待选型，本轮没有交付生产适配器或调用真实模型。真实 adapter 必须获得 provider 可核验的 revision，不能用请求值回填响应值。同步取消只能在调用边界观察；预算没有货币上限或准确 Token 保证，preflight 也不检查累计输入预算与单次能力兼容性。
 
-现有 24/24 结构准入计数即便通过，也不等于人工语义金标或真实评测完成；本轮未改标签快照、未消除人工语义裁决前置条件。标签 `export-labels` 继续由 upstream issue #8 单独跟踪。本轮未读取真实 provider 凭据、未产生真实模型费用，也不宣称 H0、H1 或生产就绪；最终独立复审仍需在本记录更新后执行。
+现有 24/24 结构准入计数即便通过，也不等于人工语义金标或真实评测完成；本轮未改标签快照，也未扩大用户已接受的评测参考标注标准。标签 `export-labels` 继续由 upstream issue #8 单独跟踪。本轮未读取真实 provider 凭据、未产生真实模型费用，也不宣称 H0、H1 或生产就绪；最终独立代码复审及修复复验已通过。

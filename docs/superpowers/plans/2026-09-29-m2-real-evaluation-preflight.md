@@ -772,10 +772,12 @@ git add packages/agent/schemas/analysis-result.schema.json packages/agent/README
 git commit -m "docs(agent): document real evaluation identity gate"
 ```
 
-- [ ] **Step 7: 同步本地交接记录**
+- [x] **Step 7: 同步本地交接记录**
 
-使用 `apply_patch` 更新根工作区忽略的 `docs/HANDOFF.md` 和 `docs/execution/2026-09-29.md`，写入实际提交、测试计数、门禁结果、已知限制和下一步。不要把本地日志加入当前分支提交。
+使用 `apply_patch` 更新根工作区忽略的 `docs/HANDOFF.md` 和执行当日 `docs/execution/2026-10-03.md`，写入实际提交、测试计数、门禁结果、已知限制和下一步。不要把本地日志加入当前分支提交。
 
-- [ ] **Step 8: 独立代码复审与最终验证**
+- [x] **Step 8: 独立代码复审与最终验证**
 
 按 `requesting-code-review` 检查 `98bdf81..HEAD` 是否满足本计划和设计；修复所有 Critical/Important 项后重新运行 Step 4 全门禁。未经用户后续要求，不推送、不创建 PR、不合并到 main。
+
+2026-10-03 最终审查修复 `04322fb`（预算异常时保留身份错误审计）和 `2658156`（preflight 身份独立快照）；原始复现复审通过，无剩余阻断。最新完整 Agent 285 passed，Ruff/56 文件格式/mypy 30 文件/离线构建与 diff check 通过。分支及工作树保留。
