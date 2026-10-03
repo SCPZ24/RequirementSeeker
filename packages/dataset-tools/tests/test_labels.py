@@ -302,7 +302,7 @@ def test_export_preserves_existing_manual_annotations(
     assert annotation_path.read_text(encoding="utf-8") == "manual work"
 
 
-def test_interrupted_label_publish_restores_backup(
+def test_interrupted_label_publish_preserves_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = _export(tmp_path, monkeypatch)
@@ -313,15 +313,16 @@ def test_interrupted_label_publish_restores_backup(
     stale.mkdir()
     (stale / "incomplete.txt").write_text("keep", encoding="utf-8")
 
-    with pytest.raises(LabelValidationError, match="label_output_already_exists"):
+    original = (backup / result.output_files[0].relative_to(output)).read_bytes()
+    with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
         export_labels(tmp_path / "sanitized", output)
 
-    assert result.output_files[0].is_file()
-    assert not backup.exists()
+    assert not output.exists()
+    assert (backup / result.output_files[0].relative_to(output)).read_bytes() == original
     assert (stale / "incomplete.txt").read_text(encoding="utf-8") == "keep"
 
 
-def test_stale_label_staging_does_not_block_new_export(
+def test_stale_label_staging_blocks_new_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     raw = tmp_path / "raw"
@@ -333,10 +334,285 @@ def test_stale_label_staging_does_not_block_new_export(
     stale.mkdir()
     (stale / "marker.txt").write_text("keep", encoding="utf-8")
 
-    result = export_labels(sanitized, tmp_path / "labels")
+    with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
+        export_labels(sanitized, tmp_path / "labels")
 
-    assert result.output_files[0].is_file()
+    assert not (tmp_path / "labels").exists()
     assert (stale / "marker.txt").read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.parametrize("name", [".fresh.backup", ".fresh.staging", ".FRESH.STAGING.old"])
+@pytest.mark.parametrize("directory", [False, True])
+def test_export_preserves_transaction_conflicts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, directory: bool
+) -> None:
+    _export(tmp_path, monkeypatch)
+    conflict = tmp_path / name
+    if directory:
+        conflict.mkdir()
+        marker = conflict / "marker"
+    else:
+        marker = conflict
+    marker.write_bytes(b"manual transaction")
+
+    with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+
+    assert marker.read_bytes() == b"manual transaction"
+    assert not (tmp_path / "fresh").exists()
+
+
+@pytest.mark.parametrize("directory", [False, True])
+def test_export_preserves_existing_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, directory: bool
+) -> None:
+    _export(tmp_path, monkeypatch)
+    output = tmp_path / "fresh"
+    if directory:
+        output.mkdir()
+    else:
+        output.write_bytes(b"manual target")
+    with pytest.raises(LabelValidationError, match="label_output_already_exists"):
+        export_labels(tmp_path / "sanitized", output)
+    assert output.is_dir() if directory else output.read_bytes() == b"manual target"
+    assert not (tmp_path / ".fresh.staging").exists()
+
+
+def test_export_validates_all_input_before_acquiring_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    comments = next((tmp_path / "sanitized").rglob("comments.jsonl"))
+    comments.write_text("invalid private source", encoding="utf-8")
+    mkdir = Path.mkdir
+    acquired: list[Path] = []
+
+    def record_mkdir(path: Path, *args: object, **kwargs: object) -> None:
+        acquired.append(path)
+        mkdir(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "mkdir", record_mkdir)
+    with pytest.raises(LabelValidationError, match="sanitized_comments_invalid"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    assert acquired == []
+
+
+def test_export_write_failure_retains_stage_and_blocks_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    write = label_module._write_annotation
+
+    def fail_write(path: Path, annotation: AnnotationFile) -> None:
+        write(path, annotation)
+        raise OSError("private path and source")
+
+    monkeypatch.setattr(label_module, "_write_annotation", fail_write)
+    with pytest.raises(LabelValidationError, match="^label_output_write_failed$"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    stage = tmp_path / ".fresh.staging"
+    assert next(stage.rglob("annotation.json")).is_file()
+    assert not (tmp_path / "fresh").exists()
+    monkeypatch.setattr(label_module, "_write_annotation", write)
+    with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+
+
+def test_export_publish_failure_retains_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+
+    def fail_rename(path: Path, target: Path) -> Path:
+        raise OSError("private publish path")
+
+    monkeypatch.setattr(Path, "rename", fail_rename)
+    with pytest.raises(LabelValidationError, match="^label_output_commit_failed$"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    assert next((tmp_path / ".fresh.staging").rglob("annotation.json")).is_file()
+    assert not (tmp_path / "fresh").exists()
+
+
+def test_export_unsupported_platform_performs_no_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    monkeypatch.setattr(label_module, "_WINDOWS_CREATE_ONLY", False, raising=False)
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+    with pytest.raises(LabelValidationError, match="label_create_only_unsupported_platform"):
+        export_labels(tmp_path / "sanitized", tmp_path / "absent" / "fresh")
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+
+
+@pytest.mark.parametrize("root_name", ["sanitized", "output"])
+def test_export_rejects_redirected_ancestors_before_resolve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root_name: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    alias = tmp_path / "alias"
+    alias.mkdir()
+    shutil.copytree(tmp_path / "sanitized", alias / "sanitized")
+    redirect = label_module._is_path_redirect
+    monkeypatch.setattr(
+        label_module, "_is_path_redirect", lambda path: path == alias or redirect(path)
+    )
+    sanitized = alias / "sanitized" if root_name == "sanitized" else tmp_path / "sanitized"
+    output = alias / "fresh" if root_name == "output" else tmp_path / "fresh"
+    code = "label_path_invalid" if root_name == "sanitized" else "label_output_path_invalid"
+    with pytest.raises(LabelValidationError, match=code):
+        export_labels(sanitized, output)
+    assert not output.exists()
+    assert not output.with_name(".fresh.staging").exists()
+
+
+@pytest.mark.parametrize("root", ["root", "empty"])
+def test_export_rejects_output_without_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, root: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    output = Path(tmp_path.anchor) if root == "root" else Path()
+    with pytest.raises(LabelValidationError, match="label_output_path_invalid"):
+        export_labels(tmp_path / "sanitized", output)
+
+
+def test_export_rechecks_target_after_acquiring_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    output = tmp_path / "fresh"
+    stage = tmp_path / ".fresh.staging"
+    mkdir = Path.mkdir
+
+    def publish_during_mkdir(
+        path: Path, mode: int = 0o777, parents: bool = False, exist_ok: bool = False
+    ) -> None:
+        mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+        if path == stage:
+            output.write_bytes(b"winner")
+
+    monkeypatch.setattr(Path, "mkdir", publish_during_mkdir)
+    with pytest.raises(LabelValidationError, match="label_output_already_exists"):
+        export_labels(tmp_path / "sanitized", output)
+    assert output.read_bytes() == b"winner"
+    assert stage.is_dir()
+    assert list(stage.iterdir()) == []
+
+
+def test_export_losing_stage_acquisition_preserves_winner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    stage = tmp_path / ".fresh.staging"
+    mkdir = Path.mkdir
+
+    def lose_mkdir(
+        path: Path, mode: int = 0o777, parents: bool = False, exist_ok: bool = False
+    ) -> None:
+        if path == stage:
+            mkdir(path)
+            (path / "winner").write_bytes(b"keep")
+        mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", lose_mkdir)
+    with pytest.raises(LabelValidationError, match="label_output_transaction_already_exists"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    assert (stage / "winner").read_bytes() == b"keep"
+
+
+def test_export_rejects_unlisted_source_redirect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    redirect = tmp_path / "sanitized" / "redirect"
+    redirect.mkdir()
+    original = label_module._is_path_redirect
+    monkeypatch.setattr(
+        label_module, "_is_path_redirect", lambda path: path == redirect or original(path)
+    )
+    with pytest.raises(LabelValidationError, match="label_path_invalid"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    assert not (tmp_path / ".fresh.staging").exists()
+
+
+@pytest.mark.parametrize("name", [".fresh.backup", ".fresh.staging", ".fresh.staging.old"])
+def test_export_rejects_redirected_transactions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    transaction = tmp_path / name
+    transaction.write_bytes(b"keep")
+    original = label_module._is_path_redirect
+    monkeypatch.setattr(
+        label_module, "_is_path_redirect", lambda path: path == transaction or original(path)
+    )
+    with pytest.raises(LabelValidationError, match="label_output_path_invalid"):
+        export_labels(tmp_path / "sanitized", tmp_path / "fresh")
+    assert transaction.read_bytes() == b"keep"
+
+
+@pytest.mark.parametrize("location", ["input", "output", "manifest", "comments"])
+def test_export_path_guard_oserror_uses_safe_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    sanitized = tmp_path / "sanitized"
+    output = tmp_path / "fresh"
+    paths = {
+        "input": sanitized,
+        "output": output,
+        "manifest": next(sanitized.rglob("sampling-manifest.json")),
+        "comments": next(sanitized.rglob("comments.jsonl")),
+    }
+    original = label_module._is_path_redirect
+    checks = 0
+
+    def fail_guard(path: Path) -> bool:
+        nonlocal checks
+        if path == paths[location]:
+            checks += 1
+            if location in ("input", "output") or checks > 1:
+                raise OSError("private absolute path")
+        return original(path)
+
+    monkeypatch.setattr(label_module, "_is_path_redirect", fail_guard)
+    code = "label_output_path_invalid" if location == "output" else "label_path_invalid"
+    with pytest.raises(LabelValidationError, match=f"^{code}$"):
+        export_labels(sanitized, output)
+    assert not (tmp_path / ".fresh.staging").exists()
+
+
+def test_export_input_directory_check_oserror_uses_safe_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path, monkeypatch)
+    sanitized = tmp_path / "sanitized"
+    is_dir = Path.is_dir
+
+    def fail_is_dir(path: Path) -> bool:
+        if path == sanitized:
+            raise PermissionError("SYNTHETIC_PRIVATE_PATH")
+        return is_dir(path)
+
+    monkeypatch.setattr(Path, "is_dir", fail_is_dir)
+    with pytest.raises(LabelValidationError, match="^label_path_invalid$"):
+        export_labels(sanitized, tmp_path / "fresh")
+    assert not (tmp_path / "fresh").exists()
+    assert not (tmp_path / ".fresh.staging").exists()
+
+
+@pytest.mark.parametrize("location", ["input", "output"])
+def test_export_embedded_null_path_uses_safe_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    _export(tmp_path, monkeypatch)
+    invalid = tmp_path / f"synthetic{chr(0)}{location}"
+    sanitized = invalid if location == "input" else tmp_path / "sanitized"
+    output = invalid if location == "output" else tmp_path / "fresh"
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+    code = "label_path_invalid" if location == "input" else "label_output_path_invalid"
+    with pytest.raises(LabelValidationError, match=f"^{code}$"):
+        export_labels(sanitized, output)
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
 
 
 def test_duplicate_comments_and_cross_video_clusters_are_rejected(
@@ -491,3 +767,55 @@ def test_label_output_must_not_replace_sanitized_input(
     with pytest.raises(LabelValidationError, match="label_output_must_be_separate"):
         export_labels(sanitized, sanitized)
     assert result.output_files[0].is_file()
+
+
+@pytest.mark.parametrize("suffix", [".", " "])
+@pytest.mark.parametrize("transaction", ["backup", "staging", "staging.old"])
+def test_export_rejects_windows_alias_with_existing_transaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, transaction: str
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    marker = tmp_path / f".labels.{transaction}" / "manual.txt"
+    marker.parent.mkdir()
+    marker.write_bytes(b"manual transaction bytes")
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+
+    with pytest.raises(LabelValidationError, match="^label_output_path_invalid$"):
+        export_labels(tmp_path / "seed" / "sanitized", tmp_path / f"labels{suffix}")
+
+    assert marker.read_bytes() == b"manual transaction bytes"
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+    assert not (tmp_path / "labels").exists()
+
+
+@pytest.mark.parametrize("suffix", [".", " "])
+@pytest.mark.parametrize("component", ["output", "ancestor"])
+def test_export_rejects_windows_alias_before_any_output_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str, component: str
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    output = (
+        tmp_path / f"labels{suffix}"
+        if component == "output"
+        else tmp_path / f"parent{suffix}" / "labels"
+    )
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+
+    with pytest.raises(LabelValidationError, match="^label_output_path_invalid$"):
+        export_labels(tmp_path / "seed" / "sanitized", output)
+
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+
+
+def test_export_accepts_parent_reference_in_output_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _export(tmp_path / "seed", monkeypatch)
+    child = tmp_path / "ordinary.parent"
+    child.mkdir()
+    output = child / ".." / "fresh"
+
+    result = export_labels(tmp_path / "seed" / "sanitized", output)
+
+    assert result.output_files[0].is_file()
+    assert result.output_files[0].is_relative_to(output)
