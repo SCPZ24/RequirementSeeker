@@ -127,7 +127,11 @@ Task 3 证据：`1427dde` 新增15项CLI回归、更新README/历史刷新计划
 
 主代理于1427dde独立全门禁：188 passed（15.27s）、跨包JSON集成3 passed（0.81s）、Ruff、18文件格式、9源码 strict mypy、离线sdist/wheel0.1.0、基线98bdf81..HEAD diff check均通过。根main d4858f1和DeepSeek分支1eb2426未变，工作树干净；真实标签、凭据、模型及文档真实命令未访问或执行。最终总审进行中。
 
-- [ ] 提交 `docs(dataset): document label export transaction safety`，新独立代理总审设计/实现及所有失败所有权边界，修复阻断并重跑门禁。
-- [ ] 更新根忽略的 HANDOFF 和当日执行日志，记录实际计数/skip及未验证平台。保留分支/工作树，不推送、建PR、合并、关闭issue或刷新标签。
+- [x] 提交 `docs(dataset): document label export transaction safety`，新独立代理总审设计/实现及所有失败所有权边界，修复阻断并重跑门禁。
+- [x] 更新根忽略的 HANDOFF 和当日执行日志，记录实际计数/skip及未验证平台。保留分支/工作树，不推送、建PR、合并、关闭issue或刷新标签。
 
 最终总审修正：原1427dde门禁虽188 passed，但发现Windows尾点/尾空格目标按原始名字检查事务、发布时归一成另一目标，6项backup/fixed/legacy组合非法成功；尾空格返回路径不可读。`c87011f` 最小入口拒绝歧义输出组件；完整组RED10 failed/64 passed→GREEN74，保留正常祖先 `..` 语法；完整199 passed、集成3 passed、Ruff/18格式/9源码 strict mypy/diff check通过。等待主代理全门禁与原总审复验，不能沿用原188项总审通过结论。
+
+最终结论（f56fdf6）：主代理最新199 passed（18.73s）/0skip、集成3 passed（1.93s）、Ruff/18格式/9源码 strict mypy/离线构建0.1.0/diff全部通过。原总审独立完整199/集成3及所有门禁通过；六个原别名场景零mkdir/write/rename拒绝，事务字节及目录条目不变，四个无冲突/祖先歧义拒绝、合法祖先..成功、CLI固定错误；P1关闭，无未解决问题。之前12个读/写中出现事务组合、最后输入无效零mkdir、发布前平台能力撤销保留stage也独立实测通过。12个实际junction在Windows执行，原生非Windows未验证；文档PowerShell只有AST证据，额外helper运行被策略拒绝不计通过。
+
+本地收尾完成，根忽略HANDOFF/执行日志同步。保留分支/工作树，不推送、建PR、合并、关闭issue、刷新真实标签或调用模型。再次刷新前须集成本分支并单独授权；24/24只能是结构可评测，不能称逐条人工语义金标。
