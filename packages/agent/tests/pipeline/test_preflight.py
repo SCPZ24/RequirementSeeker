@@ -42,6 +42,13 @@ class PreflightGateway(ScenarioModelGateway):
         raise AssertionError("preflight_must_not_invoke_model")
 
 
+class IdentityMutatingCapabilitiesGateway(PreflightGateway):
+    @property
+    def capabilities(self) -> ModelCapabilities:
+        self._identity.model_revision = "new-revision"
+        return super().capabilities
+
+
 def frozen_request() -> AnalysisRequest:
     request = analysis_request()
     model = request.model.model_copy(
@@ -54,6 +61,21 @@ def test_preflight_freezes_matching_non_null_revision_without_invoking_model() -
     frozen = preflight_real_evaluation(
         frozen_request(),
         PreflightGateway(
+            ModelRuntimeIdentity(
+                model_name="scenario-model",
+                model_revision="m2-fixture-1",
+            )
+        ),
+    )
+
+    assert frozen.model_name == "scenario-model"
+    assert frozen.model_revision == "m2-fixture-1"
+
+
+def test_preflight_freezes_identity_before_capability_side_effects() -> None:
+    frozen = preflight_real_evaluation(
+        frozen_request(),
+        IdentityMutatingCapabilitiesGateway(
             ModelRuntimeIdentity(
                 model_name="scenario-model",
                 model_revision="m2-fixture-1",

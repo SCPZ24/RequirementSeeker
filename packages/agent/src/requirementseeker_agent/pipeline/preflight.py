@@ -3,7 +3,7 @@
 from typing import Literal
 
 from ..contracts.requests import AnalysisRequest
-from ..model import FrozenModelIdentity, VersionedModelGateway
+from ..model import FrozenModelIdentity, ModelRuntimeIdentity, VersionedModelGateway
 
 PreflightErrorCode = Literal[
     "requested_revision_required",
@@ -24,13 +24,14 @@ def preflight_real_evaluation(
     request: AnalysisRequest,
     gateway: VersionedModelGateway,
 ) -> FrozenModelIdentity:
+    requested_model_name = request.model.model_name
     requested_revision = request.model.revision
     if requested_revision is None:
         raise RealEvaluationPreflightError("requested_revision_required")
-    identity = gateway.identity
+    identity = ModelRuntimeIdentity.model_validate(gateway.identity.model_dump(mode="python"))
     if identity.model_revision is None:
         raise RealEvaluationPreflightError("gateway_revision_required")
-    if identity.model_name != request.model.model_name:
+    if identity.model_name != requested_model_name:
         raise RealEvaluationPreflightError("gateway_model_mismatch")
     if identity.model_revision != requested_revision:
         raise RealEvaluationPreflightError("gateway_revision_mismatch")
