@@ -12,6 +12,8 @@
 
 Approved design: docs/superpowers/specs/2026-09-25-m2-local-data-refresh-design.md. Work from the existing isolated C:/Users/Fantason/.codex/worktrees/dataset-preparation/RequirementSeeker checkout on codex/m2-data-refresh. This is a local data operation: do not commit or print real text, raw IDs, pseudonymous IDs, or the HMAC value. Do not modify raw/, sanitized/, or labels/. Only scoped sanitizer code, synthetic tests, and documentation belong in Git; results go to the ignored E:/Projects/RequirementSeeker/docs/HANDOFF.md and docs/execution/2026-09-25.md. Use explicit absolute paths in the real operation, not a guessed working directory.
 
+Historical boundary (2026-10-03): this plan records the original refresh workflow and its historical expected counts, not authorization to execute it again. `labels-v2/` now exists and has human work; the old 24 blank templates are not disposable or replaceable. Preserve all current labeling materials and backups. The later 24/24 structural evaluation eligibility/reference-label state is not per-item human semantic gold. No command below was rerun for the create-only change; its synthetic tests do not establish a new real-data refresh result.
+
 ## File and directory map
 
 | Responsibility | Exact location |
@@ -47,11 +49,32 @@ if ((Get-FileHash -LiteralPath $plan -Algorithm SHA256).Hash -ne $expected) { th
 foreach ($name in @('raw','sanitized','labels')) {
     if (-not (Test-Path -LiteralPath (Join-Path $dataRoot $name) -PathType Container)) { throw 'baseline_directory_missing' }
 }
-foreach ($name in @('sanitized-v2','labels-v2','.sanitized-v2.backup','.labels-v2.backup')) {
-    if (Test-Path -LiteralPath (Join-Path $dataRoot $name)) { throw 'new_target_not_empty' }
+function Assert-LocalAncestors([string]$path) {
+    try {
+        $current = [IO.Path]::GetFullPath($path)
+        while ($current) {
+            $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'redirect' }
+            if (-not $item.PSIsContainer) { throw 'not_directory' }
+            $current = [IO.Path]::GetDirectoryName($current)
+        }
+    } catch { throw 'data_path_invalid' }
 }
-$staging = @(Get-ChildItem -LiteralPath $dataRoot -Directory | Where-Object { $_.Name -like '.sanitized-v2.staging.*' -or $_.Name -like '.labels-v2.staging.*' })
-if ($staging.Count) { throw 'new_target_staging_exists' }
+function Assert-NewDatasetTargets([string]$parent, [string[]]$names) {
+    Assert-LocalAncestors $parent
+    try {
+        $entries = @(Get-ChildItem -LiteralPath $parent -Force -ErrorAction Stop)
+    } catch { throw 'output_precheck_failed' }
+    foreach ($name in $names) {
+        foreach ($entry in $entries) {
+            if ($entry.Name -in @($name, ".$name.backup", ".$name.staging") -or
+                $entry.Name.StartsWith(".$name.staging.", [StringComparison]::OrdinalIgnoreCase)) {
+                throw 'new_target_or_transaction_exists'
+            }
+        }
+    }
+}
+Assert-NewDatasetTargets $dataRoot @('sanitized-v2','labels-v2')
 $secretKey = Get-Item -LiteralPath 'HKCU:\Environment'
 if ($secretKey.GetValueNames() -notcontains 'HMAC_SECRET_KEY') { throw 'stable_secret_missing' }
 'preflight_paths_ok'
@@ -60,13 +83,14 @@ if ($secretKey.GetValueNames() -notcontains 'HMAC_SECRET_KEY') { throw 'stable_s
 Check the baseline roots and output parent for redirects without printing any child name:
 
 ~~~powershell
-foreach ($name in @('raw','sanitized','labels','.')) {
-    $path = if ($name -eq '.') { $dataRoot } else { Join-Path $dataRoot $name }
-    if ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'data_path_redirect' }
+foreach ($name in @('raw','sanitized','labels')) {
+    Assert-LocalAncestors (Join-Path $dataRoot $name)
 }
 ~~~
 
 Do not inspect or output the secret value.
+
+The precheck enumerates only the output parent's immediate entries in memory, without displaying names, identifiers or content. `-Force` and the absence of a `-Directory` filter cover hidden entries, files and reparse/ broken-link transaction names. Existing output-parent and baseline ancestors must be local directories. Any target, backup, fixed staging or legacy UUID staging is a conflict regardless of its form. These checks are stricter workflow preconditions; they do not change sanitize's UUID staging behavior.
 
 - [ ] **Step 3: Check that old labels have no human work to transfer.** Run this read-only count; require 24 primary files and all other counts zero. If not, stop and redesign:
 
@@ -246,17 +270,20 @@ This uses exact JSON string tokens rather than arbitrary substrings for short ra
 
 ### Task 4: Create and validate blank labels
 
-- [ ] **Step 1: Recheck labels-v2/ and its backup/staging are absent.** If any exists, stop; do not overwrite.
+- [ ] **Step 1: Recheck labels-v2/ and all transaction names are absent.** Reuse `Assert-NewDatasetTargets` from Task 1 immediately before export, including output-parent ancestors. Reject the target, `.labels-v2.backup`, fixed `.labels-v2.staging` and every `.labels-v2.staging.*` entry, including hidden files, directories and reparse/broken links. Current labels-v2/ already contains human work, so this historical step must stop; it is not a rerun instruction.
 
 - [ ] **Step 2: Export once and validate against the new source.**
 
 ~~~powershell
 $dataRoot = 'E:\Projects\RequirementSeeker\.local-data\m2-real'
+Assert-NewDatasetTargets $dataRoot @('labels-v2')
 uv run --offline --locked --project packages/dataset-tools rs-dataset export-labels --sanitized (Join-Path $dataRoot 'sanitized-v2') --output (Join-Path $dataRoot 'labels-v2')
 if ($LASTEXITCODE -ne 0) { throw 'export_labels_failed' }
 uv run --offline --locked --project packages/dataset-tools rs-dataset validate-labels (Join-Path $dataRoot 'labels-v2') --sanitized (Join-Path $dataRoot 'sanitized-v2')
 if ($LASTEXITCODE -ne 0) { throw 'validate_labels_failed' }
 ~~~
+
+Label export is now Windows-only and create-only by default, with no new CLI flag. Failure retains its fixed staging and any existing target/backup/legacy transaction; it never restores a backup or deletes transaction material. Stop on failure without automatic retry, independently inspect retained material, and decide how to preserve or transfer it. This plan does not authorize deleting actual annotations, backups or staging. CLI errors contain fixed safe codes without actual paths or contents. Cooperative callers share the fixed staging lock and Windows no-replace rename; observable redirects are rejected, without an arbitrary same-permission hostile-directory replacement guarantee.
 
 Expected: 24 annotations, 5,090 comments, zero evaluation-eligible files. Independently parse all 24 files with this read-only aggregate check. Require no edited file, no filled comment, and no secondary/adjudication file; stop on any discrepancy and leave the new directory for inspection:
 
