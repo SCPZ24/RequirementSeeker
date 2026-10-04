@@ -188,7 +188,7 @@ git status --short
 预期测试数高于354且零失败；Ruff/格式/mypy/离线sdist及wheel/diff均exit0。检查不包含.local-data、真实评论、密钥；文档不得把本地门禁当远端CI。
 仅提交隔离分支的 README、规格和计划，消息 `docs(agent): document Qwen snapshot trust and offline verification`；本地 HANDOFF/execution 不提交。随后规格审、质量审、最终独立整体审，控制者复核并重跑门禁。
 
-- [ ] **Step 3: 收尾。**
+- [x] **Step 3: 收尾。**
 
 使用 finishing-a-development-branch 技能，默认保留隔离工作成果，不自动扩大为正式评测。根据既有发布授权与当前门禁决定是否可进入发布核对；未做发布则明确未推送/未合并。汇报精确完成项、测试和仍待单独授权的真实评测，不要求反复确认已经认可的设计。
 
@@ -199,7 +199,7 @@ git status --short
 - [x] Task1 RED/GREEN、规格审、质量审。
 - [x] Task2文档自审与新鲜完整验证。
 - [x] Task2独立规格审、质量审。
-- [ ] 最终整体审与控制者新鲜验证。
+- [x] 最终整体审与控制者新鲜验证。
 
 ## 2026-10-04 实施证据与待完成阶段
 
@@ -207,4 +207,6 @@ Task1 实施提交 `94f8f5f42e8ef88592e97c92b946716ed3a2570c`。原生产基线3
 
 Task2 文档实施者重新运行 Step2 全部离线门禁：Agent448 passed（7.39s）、Ruff检查通过、62文件格式通过、strict mypy32源码文件通过、0.3.0 sdist/wheel构建通过、`git diff --check` 通过。文件自审范围限定 README、此计划、对应规格；根仓库 HANDOFF/execution 仅本地忽略保存。这些结果是本地门禁，不是远端 CI 或真实模型语义评测。
 
-Task2 独立规格审与独立质量审已通过，无阻断问题；分别提取 README 构造示例验证身份、输入限制及零 HTTP，规格审还核对了构建包内容。最终整体审仍待完成，Step3收尾尚未完成。隔离分支与工作树保留；本阶段未push、建PR或merge，没有追加模型调用、读取凭据/真实评论或刷新标签。此前独立合成探测与本适配器离线验证保持区分，正式真实评测及费用仍需单独授权。
+Task2 独立规格审与独立质量审已通过，无阻断问题；分别提取 README 构造示例验证身份、输入限制及零 HTTP，规格审还核对了构建包内容。最终整体审和Step3收尾已完成。隔离分支与工作树保留；本阶段未push、建PR或merge，没有追加模型调用、读取凭据/真实评论或刷新标签。此前独立合成探测与本适配器离线验证保持区分，正式真实评测及费用仍需单独授权。
+
+最终独立整体审覆盖 main209e15d..3f10929 全部八文件及现有信任边界，448 passed（7.62s）、Ruff/62文件格式/32源码strict mypy/diff检查通过，无 Critical/Important/Minor。控制者在3f10929独立新鲜运行：Agent448 passed（7.94s）、跨包集成3 passed（0.87s）、Ruff/62文件格式/32源码strict mypy、0.3.0离线sdist/wheel均通过。技术上具备进入发布核对条件，但不称已发布或已完成真实评测。本次收尾只更新文档证据状态，源码和测试与已审94f8f5f相同。
