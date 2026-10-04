@@ -16,7 +16,7 @@ from .contracts import (
     SamplingManifest,
     TokenUsage,
 )
-from .model import DeepSeekModelGateway, FrozenModelIdentity, ScenarioModelGateway
+from .model import DeepSeekModelGateway, FrozenModelIdentity, QwenModelGateway, ScenarioModelGateway
 from .pipeline import (
     M2AnalysisResult,
     RealEvaluationPreflightError,
@@ -39,6 +39,7 @@ __all__ = [
     "NeedSignal",
     "OpportunityCandidate",
     "OpportunityMergeDecision",
+    "QwenModelGateway",
     "RULES_VERSION",
     "SAMPLING_POLICY_VERSION",
     "SamplingManifest",
