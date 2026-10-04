@@ -1,6 +1,6 @@
 # RequirementSeeker Agent
 
-M0 提供输入输出契约、JSON Schema 和离线校验。M1 在已验证的单视频有效快照上执行确定性三人共识判定。M2 增加采样、预算、缓存、需求信号与同视频聚类管线，提供确定性场景网关和标准库实现的 `DeepSeekModelGateway`。DeepSeek 适配器已交付，但不具备正式评测所需的可核验 revision；真实模型语义评测、采集和机会入库尚未完成。
+M0 提供输入输出契约、JSON Schema 和离线校验。M1 在已验证的单视频有效快照上执行确定性三人共识判定。M2 增加采样、预算、缓存、需求信号与同视频聚类管线，提供确定性场景网关和标准库实现的 `DeepSeekModelGateway`、`QwenModelGateway`。DeepSeek 尚不具备正式评测所需的可核验 revision；Qwen 按用户认可的供应商固定快照声明核对身份，目前仅完成离线适配器验证。真实模型语义评测、采集和机会入库尚未完成。
 
 从仓库根目录运行：
 
@@ -84,3 +84,30 @@ def make_deepseek_gateway(api_key: str) -> DeepSeekModelGateway:
 因此，正式入口 preflight 遇到请求 `revision=None` 时抛出 `requested_revision_required`；给请求任填非空 revision 时，因网关 revision 仍为空而抛出 `gateway_revision_required`。两种情况都不会发起 HTTP 请求。普通 `analyze_m2` 可使用 revision 为空的配置，但不能把普通分析当作绕过正式身份准入的真实评测结果。
 
 每次传输使用调用请求的 `timeout_seconds`，适配器没有内部重试；重试仍由现有管线及稳定 `ModelGatewayError` 原因码管理。默认传输禁止重定向，Key 仅用于固定端点认证头，错误诊断不回显 Key、响应正文或底层异常。测试可显式注入 `transport`；当前验证使用离线传输替身，尚未证明真实 provider 的端到端兼容性。
+
+## Qwen 宿主构造与快照信任边界
+
+宿主显式传入已授权的 Key 和每次输入 Token 上限；以下完整函数只构造网关，不读取环境变量或秘密文件，也不发起请求：
+
+```python
+from requirementseeker_agent import QwenModelGateway
+
+
+def make_qwen_gateway(api_key: str) -> QwenModelGateway:
+    return QwenModelGateway(
+        api_key=api_key,
+        max_input_tokens_per_call=16000,
+    )
+```
+
+配置身份固定为 `model_name=qwen-plus-2025-12-01`、`model_revision=2025-12-01`，仅支持华北2（北京）端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`。适配器通过 Python 标准库发送同步请求，不依赖 provider SDK；默认传输禁止重定向，Key 仅进入固定端点认证头。每次使用调用请求的 `timeout_seconds`，网关没有内部重试，上层管线仍按既有错误码决定重试。
+
+请求显式设置 `enable_thinking=false`、`enable_search=false`、`stream=false` 和 `response_format={"type": "json_object"}`；输出 Token 上限只接受 `1..32768`。文本与结构化输出能力为 true，图像能力为 false。结构化输出只表示 JSON object 模式，不表示供应商强制执行本项目 JSON Schema；信号、聚类载荷和可信请求中的引用仍须在本地验证。
+
+实际模型名只读取响应 `model`。只有完整 ID 精确等于已支持的 `qwen-plus-2025-12-01`，才映射实际 revision 为 `2025-12-01`；日期是该完整快照 ID 的本地规范化表示，不是供应商返回的独立 revision。别名、未知日期快照或其他合法模型名保留实际名称，实际 revision 为 `None`，由正式入口拒绝并审计。缺失或非法 `model` 产生不可重试的 `model_identity_unverifiable`，审计 `actual_model_name`、`actual_revision` 均为 `None`。不得用 requested 名称或 revision 回填实际身份，也不凭任意日期或供应商额外字段推定版本。
+
+可选 `system_fingerprint` 单独保存在 `provider_system_fingerprint`，不能替代 revision；本地 SHA-256 `response_fingerprint` 也只标识原始响应。用户认可的信任边界是供应商固定快照契约及逐次响应的身份声明，不是对底层权重的独立证明。
+
+输入预算沿用现有管线的估算与调用预算机制；`max_input_tokens_per_call` 不构成精确 Token 计数或货币上限保证。同步取消只能在调用边界前后观察，不能中断在途 HTTP 请求。正式入口仍须另行取得真实评测和费用授权；离线 preflight 与本地测试不授予调用权限。
+
+此前另行授权的一次独立合成探测返回 HTTP 200，响应 `model` 与请求完整快照 ID 一致，输入29、输出5、合计34 Token；没有独立 revision 字段，`system_fingerprint=null`。该探测不是通过本适配器的端到端联调，本适配器目前只有合成传输与正式管线的离线验证，本任务没有追加付费调用。已有24/24记录仅结构可评测，不是逐条人工语义金标；`export-labels` 已由独立 PR 修复，不因此自动刷新真实标签。

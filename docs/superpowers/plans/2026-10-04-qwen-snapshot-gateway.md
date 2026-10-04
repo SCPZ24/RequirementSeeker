@@ -27,7 +27,7 @@ subagent-driven-development：Task 1 实施→规格审→质量审，Task 2 新
 - Create: packages/agent/tests/model/test_qwen.py
 - Create: packages/agent/tests/pipeline/test_qwen_real_evaluation.py
 
-- [ ] **Step 1: 先写网关测试和正式管线集成测试。**
+- [x] **Step 1: 先写网关测试和正式管线集成测试。**
 
 测试入口必须通过断言检查导出，缺少功能时产生明确 assertion failure，而不是掩盖拼写错误的导入失败：
 
@@ -73,7 +73,7 @@ signals/cluster 响应 drift→fatal_error/model_identity_unverifiable，合法�
 正式 preflight None/不同revision/不同模型→零HTTP失败。
 ordinary Scenario revision=None 原回归保持成功。冻结key通过拦截 m2.cache_key 的 CacheKeyParts 断言 model/revision及 identity_verification_required=True，并核对更换冻结revision改变digest。
 
-- [ ] **Step 2: 运行全部新测试观察 RED，不使用 -x。**
+- [x] **Step 2: 运行全部新测试观察 RED，不使用 -x。**
 
 ```powershell
 uv run --offline --locked --project packages/agent pytest packages/agent/tests/model/test_qwen.py packages/agent/tests/pipeline/test_qwen_real_evaluation.py -q
@@ -81,7 +81,7 @@ uv run --offline --locked --project packages/agent pytest packages/agent/tests/m
 
 预期新功能相关测试均明确缺少 QwenModelGateway；已有管线行为测试可能 GREEN，分别披露，不把现有 GREEN 描述为新功能 RED。保留失败数与原因；若失败源于 fixture 错误先修 fixture 再观察。
 
-- [ ] **Step 3: 实现最小网关与公开导出。**
+- [x] **Step 3: 实现最小网关与公开导出。**
 
 沿用 model/deepseek.py 的构造验证、标准库同步 _transport/_NoRedirect、内容块隔离、HTTP/网络异常分类、响应choices/usage/finish_reason/指纹规范化代码，不修改原文件，不建立公共基类。新文件类名 QwenModelGateway，模块/类文档使用中文；身份、请求、响应差异为以下精确代码：
 
@@ -137,7 +137,7 @@ model/__init__.py 加 `from .qwen import QwenModelGateway` 和 __all__ 条目；
 identity 每次返回副本，构造不发送HTTP。网关不能读取环境变量或真实凭据。
 若测试发现真正缺陷，先补最小复现 RED；如果新追加覆盖立即GREEN，明确记录为既有行为回归，不虚构RED。
 
-- [ ] **Step 4: 验证 GREEN、相关现有回归及静态检查后提交。**
+- [x] **Step 4: 验证 GREEN、相关现有回归及静态检查后提交。**
 
 ```powershell
 uv run --offline --locked --project packages/agent pytest packages/agent/tests/model/test_qwen.py packages/agent/tests/pipeline/test_qwen_real_evaluation.py packages/agent/tests/model/test_deepseek.py packages/agent/tests/pipeline/test_preflight.py packages/agent/tests/pipeline/test_real_evaluation.py -q
@@ -157,7 +157,7 @@ git diff --check
 - Create (local only): E:/Projects/RequirementSeeker/docs/execution/2026-10-04-qwen-snapshot-gateway.md
 - Update checkboxes/evidence: 本实施计划及对应规格
 
-- [ ] **Step 1: 编写准确中文说明与不调用网络的构造示例。**
+- [x] **Step 1: 编写准确中文说明与不调用网络的构造示例。**
 
 ```python
 from requirementseeker_agent import QwenModelGateway
@@ -172,7 +172,7 @@ def make_qwen_gateway(api_key: str) -> QwenModelGateway:
 记录真实 RED/GREEN 数量、测试命令、静态检查、审查结果、提交和保留事项；没有证据的结果不写成功。
 根仓库 .git/info/exclude 明确要求 HANDOFF 与 execution 仅本地保存，不进入上游提交；隔离工作树没有这些历史文件。在根仓库 HANDOFF 顶部添加最新状态，不删除历史 DeepSeek/标签修复证据，执行记录也留在根仓库忽略目录。不得 force-add 这些文件，源码仍只改隔离分支。
 
-- [ ] **Step 2: 完整验证与文件审查。**
+- [x] **Step 2: 完整验证与文件审查。**
 
 ```powershell
 uv run --offline --locked --project packages/agent pytest packages/agent/tests -q
@@ -196,6 +196,15 @@ git status --short
 
 - [x] 用户确认书面规格、隔离分支、354项基线。
 - [x] 计划自检：Task1覆盖请求/响应/身份/缓存/审计；Task2覆盖文档及门禁；不改兼容行为。
-- [ ] Task1 RED/GREEN、规格审、质量审。
-- [ ] Task2文档/完整验证、规格审、质量审。
+- [x] Task1 RED/GREEN、规格审、质量审。
+- [x] Task2文档自审与新鲜完整验证。
+- [ ] Task2独立规格审、质量审。
 - [ ] 最终整体审与控制者新鲜验证。
+
+## 2026-10-04 实施证据与待完成阶段
+
+Task1 实施提交 `94f8f5f42e8ef88592e97c92b946716ed3a2570c`。原生产基线354项；新增94项测试初次全量 RED 为93 failed、1 passed，其中1项是现有 Scenario 兼容行为，不称新功能 RED。控制者见证测试先行及实现前尚无网关文件；随后新测试94 passed、含既有相关回归的定向测试194 passed。独立规格审新鲜194 passed，且在内存撤除导出后复现93 failed、1 passed；这一复现只是独立检查，不替代初次历史时序证据。独立质量审新鲜94 passed，无 Critical/Important/Minor 问题，两审已通过。
+
+Task2 文档实施者重新运行 Step2 全部离线门禁：Agent448 passed（7.39s）、Ruff检查通过、62文件格式通过、strict mypy32源码文件通过、0.3.0 sdist/wheel构建通过、`git diff --check` 通过。文件自审范围限定 README、此计划、对应规格；根仓库 HANDOFF/execution 仅本地忽略保存。这些结果是本地门禁，不是远端 CI 或真实模型语义评测。
+
+Task2 独立规格审、独立质量审和最终整体审仍待完成，Step3收尾尚未完成。隔离分支与工作树保留；本阶段未push、建PR或merge，没有追加模型调用、读取凭据/真实评论或刷新标签。此前独立合成探测与本适配器离线验证保持区分，正式真实评测及费用仍需单独授权。
