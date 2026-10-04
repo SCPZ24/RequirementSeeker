@@ -153,8 +153,8 @@ git diff --check
 
 **Files:**
 - Modify: packages/agent/README.md
-- Modify: docs/HANDOFF.md
-- Create or append: docs/execution/2026-10-04-qwen-snapshot-gateway.md
+- Modify (local only): E:/Projects/RequirementSeeker/docs/HANDOFF.md
+- Create (local only): E:/Projects/RequirementSeeker/docs/execution/2026-10-04-qwen-snapshot-gateway.md
 - Update checkboxes/evidence: 本实施计划及对应规格
 
 - [ ] **Step 1: 编写准确中文说明与不调用网络的构造示例。**
@@ -170,7 +170,7 @@ def make_qwen_gateway(api_key: str) -> QwenModelGateway:
 准确陈述已核验快照白名单映射、供应商声明信任边界、未知模型保留名称/None、缺失身份无法记录真实名称、fingerprint不当revision、JSON object不等于Schema强制、输入预算估算和同步取消限制。
 独立探测仅29+5Token/HTTP200；适配器本身只有离线验证，不能称已真实端到端联调。24/24仅结构可评测，不称人工语义金标。
 记录真实 RED/GREEN 数量、测试命令、静态检查、审查结果、提交和保留事项；没有证据的结果不写成功。
-在 HANDOFF 顶部添加最新状态，不删除历史 DeepSeek/标签修复证据。
+根仓库 .git/info/exclude 明确要求 HANDOFF 与 execution 仅本地保存，不进入上游提交；隔离工作树没有这些历史文件。在根仓库 HANDOFF 顶部添加最新状态，不删除历史 DeepSeek/标签修复证据，执行记录也留在根仓库忽略目录。不得 force-add 这些文件，源码仍只改隔离分支。
 
 - [ ] **Step 2: 完整验证与文件审查。**
 
@@ -186,7 +186,7 @@ git status --short
 ```
 
 预期测试数高于354且零失败；Ruff/格式/mypy/离线sdist及wheel/diff均exit0。检查不包含.local-data、真实评论、密钥；文档不得把本地门禁当远端CI。
-提交 `docs(agent): document Qwen snapshot trust and offline verification`；随后规格审、质量审、最终独立整体审，控制者复核并重跑门禁。
+仅提交隔离分支的 README、规格和计划，消息 `docs(agent): document Qwen snapshot trust and offline verification`；本地 HANDOFF/execution 不提交。随后规格审、质量审、最终独立整体审，控制者复核并重跑门禁。
 
 - [ ] **Step 3: 收尾。**
 
