@@ -2,6 +2,7 @@
 
 from .deepseek import DeepSeekModelGateway
 from .fake import ScenarioModelGateway
+from .qwen import QwenModelGateway
 from .types import (
     ControlledContentBlock,
     FrozenModelIdentity,
@@ -28,6 +29,7 @@ __all__ = [
     "ModelGateway",
     "ModelGatewayError",
     "ModelRuntimeIdentity",
+    "QwenModelGateway",
     "ScenarioModelGateway",
     "VersionedModelGateway",
 ]
