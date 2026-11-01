@@ -84,10 +84,14 @@ def run_h0(
         plan.selected_comment_ids != [comment.comment_id for comment in request.comments]
     ):
         return FlowResult("incomplete", "sampling_mismatch")
-    if m2.status == "no_signal" and "signals" in m2.completed_steps and not m2.clusters:
+    if m2.status == "no_signal":
+        if m2.completed_steps != ["preprocess", "signals"] or m2.clusters:
+            return FlowResult("incomplete", "upstream_steps_mismatch")
         return FlowResult("no_opportunity", "no_signal")
-    if m2.status != "completed" or "consensus" not in m2.completed_steps:
+    if m2.status != "completed":
         return FlowResult("incomplete", m2.error_code or m2.status)
+    if m2.completed_steps != ["preprocess", "signals", "cluster", "consensus"]:
+        return FlowResult("incomplete", "upstream_steps_mismatch")
     if len(m2.clusters) != 1:
         return FlowResult("incomplete", "single_cluster_required")
     cluster = m2.clusters[0]

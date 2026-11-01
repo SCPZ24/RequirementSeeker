@@ -142,3 +142,26 @@ def test_judge_cannot_rewrite_the_evidence_used_for_admission(inputs):
     store = h0.MemoryIntentStore()
     result = h0.run_h0(*inputs, RewritingJudge(), store)
     assert result.reason == "candidate_evidence_mismatch" and not store.intents
+
+
+@pytest.mark.parametrize(
+    ("status", "steps"),
+    [
+        ("completed", ["consensus"]),
+        ("completed", ["preprocess", "signals", "consensus", "cluster"]),
+        ("no_signal", ["signals"]),
+        ("no_signal", ["signals", "preprocess"]),
+        ("no_signal", ["preprocess", "signals", "cluster"]),
+    ],
+)
+def test_inconsistent_success_steps_stop_before_judging(inputs, status, steps):
+    request, m2 = inputs
+    data = m2.model_dump()
+    data.update(status=status, completed_steps=steps)
+    if status == "no_signal":
+        data.update(signals=[], clusters=[], decisions=[])
+    upstream = M2AnalysisResult.model_validate(data)
+    judge, store = Judge(), h0.MemoryIntentStore()
+    result = h0.run_h0(request, upstream, judge, store)
+    assert (result.status, result.reason) == ("incomplete", "upstream_steps_mismatch")
+    assert result.intent is None and not judge.calls and not store.intents
