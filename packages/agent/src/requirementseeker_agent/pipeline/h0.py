@@ -2,17 +2,21 @@
 
 import hashlib
 import json
+from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from ..contracts.analysis import (
     ConsensusDecision,
     ContextDecision,
+    Evidence,
     NeedCluster,
     OpportunityCandidate,
+    OpportunityMergeDecision,
 )
 from ..contracts.requests import AnalysisRequest
-from ..contracts.results import NewCandidate
+from ..contracts.results import MergeEvidence, NewCandidate
 from ..rules import evaluate_consensus
 from .types import M2AnalysisResult
 
@@ -39,29 +43,103 @@ class FlowResult:
         "committed", "already_committed", "context_insufficient", "no_opportunity", "incomplete"
     ]
     reason: str
-    intent: NewCandidate | None = None
+    intent: NewCandidate | MergeEvidence | None = None
+
+
+@dataclass(frozen=True)
+class HistoricalOpportunity:
+    opportunity_id: str
+    target_user: str
+    scenario: str
+    problem: str
+    software_shape: str
+    evidence: tuple[Evidence, ...] = ()
+    manual_stage: str = ""
+    manual_note: str = ""
+
+
+HistoryJudge = Callable[
+    [OpportunityCandidate, tuple[HistoricalOpportunity, ...]], OpportunityMergeDecision | None
+]
 
 
 class MemoryIntentStore:
     """演示用的串行、进程内历史与提交替身。"""
 
-    def __init__(self, *, history_complete: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        history_complete: bool = True,
+        history_revision: str | None = None,
+        history: tuple[HistoricalOpportunity, ...] = (),
+        history_judge: HistoryJudge | None = None,
+    ) -> None:
         self.history_complete = history_complete
-        self.intents: dict[str, NewCandidate] = {}
+        self._history = deepcopy(history)
+        self._revision = history_revision
+        self._judge = history_judge
+        self.intents: dict[str, NewCandidate | MergeEvidence] = {}
+        # 重放先按来源定位原回执；追加回执自身的键还绑定目标机会。
+        self._receipt_keys: dict[str, str] = {}
 
-    def commit_once(self, intent: NewCandidate) -> FlowResult:
-        key = intent.idempotency_key
-        previous = self.intents.get(key)
+    def commit_once(
+        self, intent: NewCandidate, *, history_revision: str | None = None
+    ) -> FlowResult:
+        if not self.history_complete:
+            return FlowResult("incomplete", "history_incomplete")
+        if (self._history or self._revision is not None) and (
+            not self._revision or self._revision != history_revision
+        ):
+            return FlowResult("incomplete", "history_revision_mismatch")
+        targets = {row.opportunity_id for row in self._history}
+        if len(targets) != len(self._history):
+            return FlowResult("incomplete", "history_target_ambiguous")
+        source_key = intent.idempotency_key
+        previous = self.intents.get(self._receipt_keys.get(source_key, source_key))
         if previous is not None:
-            if previous.candidate.evidence != intent.candidate.evidence:
+            prior_evidence = (
+                previous.merge.evidence
+                if isinstance(previous, MergeEvidence)
+                else previous.candidate.evidence
+            )
+            if prior_evidence != intent.candidate.evidence:
                 return FlowResult("incomplete", "evidence_conflict")
             return FlowResult(
                 "already_committed", "evidence_replayed", previous.model_copy(deep=True)
             )
-        if not self.history_complete:
-            return FlowResult("incomplete", "history_incomplete")
-        self.intents[key] = intent.model_copy(deep=True)
-        return FlowResult("committed", "intent_recorded", intent)
+        receipt: NewCandidate | MergeEvidence = intent
+        if self._history:
+            if self._judge is None:
+                return FlowResult("incomplete", "history_judge_missing")
+            try:
+                proposal = self._judge(
+                    intent.candidate.model_copy(deep=True), deepcopy(self._history)
+                )
+                if proposal is not None:
+                    if not isinstance(proposal, OpportunityMergeDecision):
+                        return FlowResult("incomplete", "invalid_merge_proposal")
+                    proposal = OpportunityMergeDecision.model_validate(proposal.model_dump())
+            except Exception:
+                # 外部判断器失败只能中止此次路由，不能当作“未找到匹配”。
+                return FlowResult("incomplete", "history_judge_failed")
+            if proposal is not None:
+                if (
+                    proposal.target_opportunity_id not in targets
+                    or proposal.candidate_id != intent.candidate.candidate_id
+                    or proposal.evidence != intent.candidate.evidence
+                ):
+                    return FlowResult("incomplete", "untrusted_merge_reference")
+                key = hashlib.sha256(
+                    json.dumps(
+                        ["merge_evidence", proposal.target_opportunity_id, source_key]
+                    ).encode()
+                ).hexdigest()
+                receipt = MergeEvidence(
+                    status="merge_evidence", merge=proposal, idempotency_key=key
+                )
+        self.intents[receipt.idempotency_key] = receipt.model_copy(deep=True)
+        self._receipt_keys[source_key] = receipt.idempotency_key
+        return FlowResult("committed", "intent_recorded", receipt)
 
 
 def run_h0(
@@ -135,4 +213,4 @@ def run_h0(
     identity = [m2.platform, m2.video_id, sorted(e.comment_id for e in consensus.evidence)]
     key = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
     intent = NewCandidate(status="new_candidate", candidate=candidate, idempotency_key=key)
-    return store.commit_once(intent)
+    return store.commit_once(intent, history_revision=request.history_revision)
