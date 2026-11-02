@@ -27,5 +27,7 @@ def read(directory):
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     for summary in read(Path(sys.argv[1])):
         print(json.dumps(summary, ensure_ascii=False))

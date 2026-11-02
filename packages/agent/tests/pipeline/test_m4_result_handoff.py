@@ -24,7 +24,7 @@ def read(directory):
     return subprocess.run(
         [sys.executable, str(EXAMPLES / "read_m4_results.py"), str(directory)],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
 
 
@@ -47,6 +47,7 @@ def test_independent_read_of_real_runs(generated):
     assert rows[0]["intent_key"] == rows[1]["intent_key"]
     assert rows[3]["intent_key"] == rows[4]["intent_key"]
     assert rows[2]["reason"] == "history_incomplete"
+    assert rows[0]["payload"]["merge"]["evidence"][0]["text"] == "希望批量导出记录。"
     schema = json.loads((EXAMPLES.parent / "schemas/analysis-result.schema.json").read_bytes())
     validator = Draft202012Validator(schema)
     for row in json.loads((generated / "results.json").read_bytes()):
