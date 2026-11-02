@@ -63,6 +63,11 @@ HistoryJudge = Callable[
 ]
 
 
+def _ordered_evidence(items: list[Evidence]) -> list[Evidence]:
+    # 单视频内评论 ID 唯一。排序只消除排列差异，比较保留 Evidence 全部字段。
+    return sorted(items, key=lambda item: item.comment_id)
+
+
 class MemoryIntentStore:
     """演示用的串行、进程内历史与提交替身。"""
 
@@ -102,7 +107,7 @@ class MemoryIntentStore:
                 if isinstance(previous, MergeEvidence)
                 else previous.candidate.evidence
             )
-            if prior_evidence != intent.candidate.evidence:
+            if _ordered_evidence(prior_evidence) != _ordered_evidence(intent.candidate.evidence):
                 return FlowResult("incomplete", "evidence_conflict")
             return FlowResult(
                 "already_committed", "evidence_replayed", previous.model_copy(deep=True)
@@ -126,9 +131,11 @@ class MemoryIntentStore:
                 if (
                     proposal.target_opportunity_id not in targets
                     or proposal.candidate_id != intent.candidate.candidate_id
-                    or proposal.evidence != intent.candidate.evidence
+                    or _ordered_evidence(proposal.evidence)
+                    != _ordered_evidence(intent.candidate.evidence)
                 ):
                     return FlowResult("incomplete", "untrusted_merge_reference")
+                proposal.evidence = deepcopy(intent.candidate.evidence)
                 key = hashlib.sha256(
                     json.dumps(
                         ["merge_evidence", proposal.target_opportunity_id, source_key]

@@ -113,3 +113,34 @@ def test_incomplete_even_when_receipt_already_exists(inputs):
     store.history_complete = False
     assert run_h0(request, m2, test_h0.Judge(), store).status == "incomplete"
     assert store.intents == prior
+
+
+def test_merge_accepts_reordered_evidence_but_stores_candidate_order(inputs):
+    request, m2 = inputs
+
+    def reordered(candidate, records):
+        proposal = decision(candidate, records)
+        proposal.evidence.reverse()
+        return proposal
+
+    store = MemoryIntentStore(
+        history=(existing(m2),), history_revision=request.history_revision, history_judge=reordered
+    )
+    result = run_h0(request, m2, test_h0.Judge(), store)
+    assert result.status == "committed"
+    assert result.intent.merge.evidence == m2.decisions[0].evidence
+
+
+def test_reordered_source_replays_but_modified_author_or_quote_conflicts(inputs):
+    request, m2 = inputs
+    store = MemoryIntentStore()
+    first = run_h0(request, m2, test_h0.Judge(), store)
+    incoming = first.intent.model_copy(deep=True)
+    incoming.candidate.evidence.reverse()
+    again = store.commit_once(incoming)
+    assert again.status == "already_committed" and again.intent == first.intent
+    for field in ("author_id", "text"):
+        changed = incoming.model_copy(deep=True)
+        setattr(changed.candidate.evidence[0], field, "changed")
+        assert store.commit_once(changed).reason == "evidence_conflict"
+    assert list(store.intents.values()) == [first.intent]
