@@ -16,10 +16,7 @@ from requirementseeker_agent.runtime import InMemorySemanticCache
 from requirementseeker_agent.sampling import plan_sampling
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--real-evaluation", action="store_true", help="离线演示身份准入入口")
-    args = parser.parse_args()
+def demo_request(*, real_evaluation: bool = False) -> AnalysisRequest:
     fixture = Path(__file__).parents[1] / "tests" / "fixtures" / "valid" / "request.json"
     source = json.loads(fixture.read_text(encoding="utf-8"))
     source["video"]["title"] = "批量导出记录的合成视频"
@@ -27,13 +24,15 @@ def main() -> None:
     for index, (comment, text) in enumerate(zip(source["comments"], texts, strict=True), start=1):
         comment["comment_id"] = f"c{index}"
         comment["text"] = text
-    if args.real_evaluation:
+    if real_evaluation:
         source["model"]["model_name"] = "scenario-model"
         source["model"]["revision"] = "m2-fixture-1"
-    request = AnalysisRequest.model_validate(source)
+    return AnalysisRequest.model_validate(source)
 
+
+def demo_manifest(request: AnalysisRequest) -> SamplingManifest:
     comment_ids = [comment.comment_id for comment in request.comments]
-    manifest = SamplingManifest(
+    return SamplingManifest(
         sampling_schema_version="1.1",
         manifest_id="demo-manifest-1",
         platform=request.video.platform,
@@ -47,13 +46,21 @@ def main() -> None:
         available_strata={"top"},
         direction="software_tool",
         author_id_present=len(comment_ids),
-        distinct_author_count=len(comment_ids),
+        distinct_author_count=len({c.author_id for c in request.comments if c.author_id}),
         exact_duplicate_count=0,
         normalized_duplicate_count=0,
         video_metrics=None,
         candidate_comment_ids=comment_ids,
         stratum_comment_ids={"top": comment_ids},
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--real-evaluation", action="store_true", help="离线演示身份准入入口")
+    args = parser.parse_args()
+    request = demo_request(real_evaluation=args.real_evaluation)
+    manifest = demo_manifest(request)
     plan = plan_sampling(manifest, request.comments, request.budget)
     analyze = analyze_m2_real_evaluation if args.real_evaluation else analyze_m2
     result = analyze(
