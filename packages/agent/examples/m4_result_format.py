@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import TypeAdapter
+from pydantic import Field, TypeAdapter
 
 from requirementseeker_agent.contracts.analysis import ContextDecision, OpportunityCandidate
 from requirementseeker_agent.contracts.common import Contract, Identifier, Step
@@ -13,12 +13,14 @@ from requirementseeker_agent.contracts.results import (
     BudgetExhausted,
     Cancelled,
     FatalError,
+    InsufficientContext,
     MergeEvidence,
     NewCandidate,
     Outcome,
     Rejected,
     RetryableError,
 )
+from requirementseeker_agent.pipeline.context import FrameReview, recheck
 from requirementseeker_agent.pipeline.h0 import FlowResult, _ordered_evidence
 from requirementseeker_agent.pipeline.types import M2AnalysisResult
 from requirementseeker_agent.rules import evaluate_consensus
@@ -34,11 +36,14 @@ class RunSource(Contract):
     receipt: FlowResult
     previous: list[NewCandidate | MergeEvidence]
     current: list[NewCandidate | MergeEvidence]
+    frame_review: FrameReview | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class Handoff(Contract):
     run_id: Identifier
-    status: Literal["committed", "already_committed", "no_opportunity", "incomplete"]
+    status: Literal[
+        "committed", "already_committed", "no_opportunity", "incomplete", "context_insufficient"
+    ]
     reason: Identifier
     result: AnalysisResult | None
 
@@ -62,13 +67,34 @@ def project(source: RunSource) -> Handoff:
         len(m2.clusters) != 1 or decision != evaluate_consensus(request, m2.clusters[0])
     ):
         raise ValueError("consensus_source_mismatch")
+    reviewed = None
+    invalid_review = False
+    if source.frame_review is not None:
+        if not source.context or not decision or not decision.passed or m2.status != "completed":
+            raise ValueError("unexpected_frame_review")
+        try:
+            reviewed = recheck(request, m2.clusters[0], source.context, source.frame_review)
+        except ValueError:
+            if (receipt.status, receipt.reason) != ("incomplete", "invalid_frame_review"):
+                raise
+            invalid_review = True
+        if reviewed:
+            decision = reviewed
+            contexts.append(
+                ContextDecision(
+                    cluster_id=decision.cluster_id,
+                    status="context_sufficient",
+                    reason="已按补充帧重新核对评论成员",
+                    context_refs=[source.frame_review.frame_id],
+                )
+            )
     if source.candidate and (
         not decision
         or not decision.passed
         or source.candidate.cluster_id != decision.cluster_id
         or source.candidate.evidence != decision.evidence
         or not source.context
-        or source.context.status != "text_sufficient"
+        or (source.context.status != "text_sufficient" and reviewed is None)
         or source.context.cluster_id != decision.cluster_id
     ):
         raise ValueError("candidate_source_mismatch")
@@ -120,9 +146,53 @@ def project(source: RunSource) -> Handoff:
                 raise ValueError("history_state_mismatch")
             # v1 没有“未判定可重试性”的 outcome；保留真实停止原因。
             return Handoff(run_id=m2.run_id, status=status, reason=receipt.reason, result=None)
-        if m2.clusters or contexts or source.candidate:
+        if source.context and source.context.status == "media_required":
+            if (
+                m2.status != "completed"
+                or not m2.decisions
+                or not m2.decisions[0].passed
+                or source.candidate
+                or source.context.cluster_id != m2.clusters[0].cluster_id
+            ):
+                raise ValueError("context_source_mismatch")
+            if (
+                status == "context_insufficient"
+                and source.frame_review is None
+                and (
+                    receipt.reason
+                    == (
+                        "frame_unavailable"
+                        if request.model.supports_images
+                        else "image_capability_missing"
+                    )
+                )
+            ):
+                outcome = InsufficientContext(
+                    status=status, cluster_id=source.context.cluster_id, reason_code=receipt.reason
+                )
+            elif (
+                status == "no_opportunity"
+                and receipt.reason == "context_consensus_lost"
+                and reviewed
+                and not reviewed.passed
+            ):
+                outcome = Rejected(
+                    status="rejected", cluster_id=reviewed.cluster_id, reason_code=receipt.reason
+                )
+            elif status == "incomplete" and (
+                invalid_review
+                or (
+                    receipt.reason == "frame_review_failed"
+                    and source.frame_review is None
+                    and request.model.supports_images
+                )
+            ):
+                return Handoff(run_id=m2.run_id, status=status, reason=receipt.reason, result=None)
+            else:
+                raise ValueError("frame_outcome_mismatch")
+        elif m2.clusters or contexts or source.candidate:
             raise ValueError("unsupported_handoff_state")
-        if status == "no_opportunity" and receipt.reason == m2.status == "no_signal":
+        elif status == "no_opportunity" and receipt.reason == m2.status == "no_signal":
             outcome = Rejected(status="rejected", cluster_id=None, reason_code=receipt.reason)
         elif status == "incomplete" and receipt.reason == (m2.error_code or m2.status):
             stage: Step
@@ -161,7 +231,7 @@ def project(source: RunSource) -> Handoff:
         completed_steps=steps,
         signals=m2.signals,
         clusters=m2.clusters,
-        consensus_decisions=m2.decisions,
+        consensus_decisions=[reviewed] if reviewed is not None else m2.decisions,
         context_decisions=contexts,
         inference_steps=[],
         audits=m2.audits,

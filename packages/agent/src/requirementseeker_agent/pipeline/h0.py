@@ -18,6 +18,7 @@ from ..contracts.analysis import (
 from ..contracts.requests import AnalysisRequest
 from ..contracts.results import MergeEvidence, NewCandidate
 from ..rules import evaluate_consensus
+from .context import FrameReview, FrameReviewer, eligible_frames, recheck
 from .types import M2AnalysisResult
 
 
@@ -154,6 +155,8 @@ def run_h0(
     m2: M2AnalysisResult,
     judge: OpportunityJudge,
     store: MemoryIntentStore,
+    *,
+    frame_reviewer: FrameReviewer | None = None,
 ) -> FlowResult:
     """只消费一个已完成的合成 M2 簇，使用注入的判断器和内存历史。"""
     if (m2.run_id, m2.platform, m2.video_id) != (
@@ -191,15 +194,44 @@ def run_h0(
     if not consensus.passed:
         return FlowResult("no_opportunity", consensus.reason_code)
     try:
-        context = judge.assess_context(request.model_copy(deep=True), cluster.model_copy(deep=True))
+        working = request.model_copy(deep=True)
+        working.media_context = []
+        context = judge.assess_context(working.model_copy(deep=True), cluster.model_copy(deep=True))
         if context.cluster_id != cluster.cluster_id:
             return FlowResult("incomplete", "context_cluster_mismatch")
         if context.status == "context_sufficient":
             return FlowResult("incomplete", "unsupported_media_context")
-        if context.status != "text_sufficient":
+        if context.status == "media_required":
+            if not request.model.supports_images:
+                return FlowResult("context_insufficient", "image_capability_missing")
+            frames = eligible_frames(request, context)
+            if not frames or frame_reviewer is None:
+                return FlowResult("context_insufficient", "frame_unavailable")
+            working.media_context = deepcopy(frames)
+            try:
+                review = frame_reviewer(
+                    working.model_copy(deep=True), cluster.model_copy(deep=True)
+                )
+            except Exception:
+                return FlowResult("incomplete", "frame_review_failed")
+            if review is None:
+                return FlowResult("context_insufficient", "frame_unavailable")
+            try:
+                if not isinstance(review, FrameReview):
+                    raise ValueError("invalid_frame_review")
+                consensus = recheck(request, cluster, context, review)
+            except ValueError:
+                return FlowResult("incomplete", "invalid_frame_review")
+            if not consensus.passed:
+                return FlowResult("no_opportunity", "context_consensus_lost")
+            working.media_context = [
+                f for f in working.media_context if f.context_id == review.frame_id
+            ]
+            cluster = cluster.model_copy(update={"comment_ids": review.supported_comment_ids})
+        elif context.status != "text_sufficient":
             return FlowResult("context_insufficient", context.status)
         assessment = judge.assess_opportunity(
-            request.model_copy(deep=True),
+            working,
             cluster.model_copy(deep=True),
             consensus.model_copy(deep=True),
         )
