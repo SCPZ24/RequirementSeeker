@@ -1,10 +1,15 @@
 """本地合成交接格式。宿主提供可信运行记录；结果使用原 AnalysisResult v1。"""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, TypeAdapter
 
-from requirementseeker_agent.contracts.analysis import ContextDecision, OpportunityCandidate
+from requirementseeker_agent.contracts.analysis import (
+    ContextDecision,
+    InferenceStep,
+    OpportunityCandidate,
+)
 from requirementseeker_agent.contracts.common import Contract, Identifier, Step
 from requirementseeker_agent.contracts.requests import AnalysisRequest
 from requirementseeker_agent.contracts.results import (
@@ -37,6 +42,9 @@ class RunSource(Contract):
     previous: list[NewCandidate | MergeEvidence]
     current: list[NewCandidate | MergeEvidence]
     frame_review: FrameReview | None = Field(default=None, exclude_if=lambda v: v is None)
+    explanation_version: Literal["observed-v1"] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
 
 class Handoff(Contract):
@@ -255,6 +263,38 @@ def project(source: RunSource) -> Handoff:
         else:
             raise ValueError("unsupported_handoff_state")
 
+    nodes: list[InferenceStep] = []
+    if source.explanation_version and decision and decision.passed:
+        refs = [e.comment_id for e in decision.evidence]
+        nodes.append(
+            InferenceStep(
+                step_id="consensus-evidence",
+                kind="fact",
+                title="独立评论来源",
+                body=f"本视频的当前共识有 {len(refs)} 位独立作者的代表评论。",
+                evidence_refs=refs,
+            )
+        )
+        if source.candidate:
+            nodes.append(
+                InferenceStep(
+                    step_id="software-candidate",
+                    kind="inference",
+                    title="候选软件方向",
+                    body=source.candidate.summary,
+                    evidence_refs=refs,
+                )
+            )
+        if isinstance(intent, MergeEvidence):
+            nodes.append(
+                InferenceStep(
+                    step_id="history-match",
+                    kind="inference",
+                    title="追加判断",
+                    body=intent.merge.reason,
+                    evidence_refs=refs,
+                )
+            )
     result = AnalysisResult(
         schema_version="1.0",
         run_id=m2.run_id,
@@ -266,7 +306,7 @@ def project(source: RunSource) -> Handoff:
         clusters=m2.clusters,
         consensus_decisions=[reviewed] if reviewed is not None else m2.decisions,
         context_decisions=contexts,
-        inference_steps=[],
+        inference_steps=nodes,
         audits=m2.audits,
         outcomes=[outcome],
     )
@@ -275,3 +315,20 @@ def project(source: RunSource) -> Handoff:
 
 sources_type = TypeAdapter(list[RunSource])
 results_type = TypeAdapter(list[Handoff])
+
+
+def write_handoff(directory: Path, sources: list[RunSource]) -> None:
+    """只写新结果对，保留旧失败/成功记录供宿主按运行号追溯。"""
+    records = [s.model_copy(update={"explanation_version": "observed-v1"}) for s in sources]
+    rows = [project(s) for s in records]
+    directory.mkdir(parents=True, exist_ok=True)
+    paths = (directory / "sources.json", directory / "results.json")
+    if any(path.exists() for path in paths):
+        raise FileExistsError("handoff_already_exists")
+    for path, payload in zip(
+        paths,
+        (sources_type.dump_json(records, indent=2), results_type.dump_json(rows, indent=2)),
+        strict=True,
+    ):
+        with path.open("xb") as stream:
+            stream.write(payload)

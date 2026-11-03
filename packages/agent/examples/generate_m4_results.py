@@ -8,7 +8,7 @@ from pathlib import Path
 from m2_fake_demo import demo_manifest, demo_request
 from m2_h0_demo import ExportJudge, RecordingGateway
 from m4_history_demo import FixtureRouter
-from m4_result_format import RunSource, project, results_type, sources_type
+from m4_result_format import RunSource, write_handoff
 
 from requirementseeker_agent import analyze_m2
 from requirementseeker_agent.pipeline.h0 import HistoricalOpportunity, MemoryIntentStore, run_h0
@@ -102,11 +102,7 @@ def runs():
 
 
 def main(directory):
-    directory.mkdir(parents=True, exist_ok=True)
-    sources = list(runs())
-    rows = [project(s) for s in sources]
-    (directory / "sources.json").write_bytes(sources_type.dump_json(sources, indent=2))
-    (directory / "results.json").write_bytes(results_type.dump_json(rows, indent=2))
+    write_handoff(directory, list(runs()))
 
 
 if __name__ == "__main__":

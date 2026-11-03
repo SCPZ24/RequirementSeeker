@@ -8,7 +8,7 @@ from pathlib import Path
 from generate_m4_results import ObservedJudge
 from m2_fake_demo import demo_manifest, demo_request
 from m2_h0_demo import RecordingGateway
-from m4_result_format import RunSource, project, results_type, sources_type
+from m4_result_format import RunSource, write_handoff
 
 from requirementseeker_agent import analyze_m2
 from requirementseeker_agent.contracts.requests import MediaContext
@@ -131,10 +131,7 @@ def main(directory):
     for source, observation in runs():
         sources.append(source)
         print(json.dumps(observation))
-    rows = [project(source) for source in sources]
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "sources.json").write_bytes(sources_type.dump_json(sources, indent=2))
-    (directory / "results.json").write_bytes(results_type.dump_json(rows, indent=2))
+    write_handoff(directory, sources)
 
 
 if __name__ == "__main__":
