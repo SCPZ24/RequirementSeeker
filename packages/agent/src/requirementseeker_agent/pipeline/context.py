@@ -17,13 +17,21 @@ class FrameReview(Contract):
 FrameReviewer = Callable[[AnalysisRequest, NeedCluster], FrameReview | None]
 
 
+def valid_context_refs(request: AnalysisRequest, context: ContextDecision) -> bool:
+    # 文本判断没有媒体输入。media_required 可指定要读取的已提供帧，但不能发明引用。
+    refs = set(context.context_refs)
+    return not refs or (
+        context.status == "media_required"
+        and len(refs) == len(context.context_refs)
+        and refs.issubset(f.context_id for f in request.media_context if f.kind == "frame")
+    )
+
+
 def eligible_frames(request: AnalysisRequest, context: ContextDecision) -> list[MediaContext]:
     frames = [item for item in request.media_context if item.kind == "frame"]
     if context.context_refs:
         allowed = set(context.context_refs)
         frames = [item for item in frames if item.context_id in allowed]
-        if allowed != {item.context_id for item in frames}:
-            return []
     return frames
 
 
@@ -34,6 +42,7 @@ def recheck(
     if (
         not request.model.supports_images
         or context.status != "media_required"
+        or not valid_context_refs(request, context)
         or review.cluster_id != context.cluster_id
         or context.cluster_id != cluster.cluster_id
         or review.frame_id not in {f.context_id for f in eligible_frames(request, context)}

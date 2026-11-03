@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,9 @@ from requirementseeker_agent.sampling import plan_sampling
     ("case", "status", "reason", "calls", "written"),
     [
         ("text", "committed", "intent_recorded", 0, 1),
+        ("text-ref", "incomplete", "invalid_context_refs", 0, 0),
+        ("media-ref", "incomplete", "invalid_context_refs", 0, 0),
+        ("filtered", "no_opportunity", "opportunity_filtered", 1, 0),
         ("no-vision", "context_insufficient", "image_capability_missing", 0, 0),
         ("no-frame", "context_insufficient", "frame_unavailable", 0, 0),
         ("unavailable", "context_insufficient", "frame_unavailable", 1, 0),
@@ -30,6 +34,7 @@ def test_actual_context_gate(monkeypatch, case, status, reason, calls, written):
     monkeypatch.syspath_prepend(str(Path(__file__).parents[2] / "examples"))
     from m2_fake_demo import demo_manifest, demo_request
     from m2_h0_demo import ExportJudge, RecordingGateway
+    from m4_result_format import RunSource, project
 
     request = demo_request()
     request.model.supports_images = case != "no-vision"
@@ -59,16 +64,19 @@ def test_actual_context_gate(monkeypatch, case, status, reason, calls, written):
     class Judge(ExportJudge):
         def assess_context(self, request, cluster):
             assert not request.media_context
-            return ContextDecision(
+            self.context = ContextDecision(
                 cluster_id=cluster.cluster_id,
-                status="text_sufficient" if case == "text" else "media_required",
+                status="text_sufficient" if case in ("text", "text-ref") else "media_required",
                 reason="合成对象判断",
-                context_refs=[],
+                context_refs=["absent"] if case.endswith("-ref") else [],
             )
+            return self.context
 
         def assess_opportunity(self, request, cluster, consensus):
-            assert bool(request.media_context) == (case == "valid")
-            return super().assess_opportunity(request, cluster, consensus)
+            assert bool(request.media_context) == (case in ("valid", "filtered"))
+            assessment = super().assess_opportunity(request, cluster, consensus)
+            self.candidate = assessment.candidate
+            return replace(assessment, light_operations=case != "filtered")
 
     def review(request, cluster):
         observed.append(request.run_id)
@@ -94,7 +102,33 @@ def test_actual_context_gate(monkeypatch, case, status, reason, calls, written):
         calls,
         written,
     )
-    assert judge.stages.count("opportunity") == written
+    assert judge.stages.count("opportunity") == written + (case == "filtered")
+    if case.endswith("-ref") or case == "filtered":
+        source = RunSource(
+            request=request,
+            m2=m2,
+            context=judge.context,
+            candidate=getattr(judge, "candidate", None),
+            target_ids=[],
+            history_complete=True,
+            receipt=result,
+            previous=[],
+            current=list(store.intents.values()),
+            frame_review=FrameReview(
+                cluster_id=m2.clusters[0].cluster_id,
+                frame_id="frame",
+                supported_comment_ids=m2.clusters[0].comment_ids,
+            )
+            if case == "filtered"
+            else None,
+        )
+        row = project(source)
+        if case == "filtered":
+            assert result.failed_gates == ("light_operations",)
+            assert row.result.outcomes[0].status == "rejected"
+            assert row.result.consensus_decisions[0].evidence == source.candidate.evidence
+        else:
+            assert row.result is None
 
 
 def test_serialized_results_keep_context_stops_distinct(tmp_path, monkeypatch):

@@ -20,7 +20,7 @@ from requirementseeker_agent.contracts.results import (
     Rejected,
     RetryableError,
 )
-from requirementseeker_agent.pipeline.context import FrameReview, recheck
+from requirementseeker_agent.pipeline.context import FrameReview, recheck, valid_context_refs
 from requirementseeker_agent.pipeline.h0 import FlowResult, _ordered_evidence
 from requirementseeker_agent.pipeline.types import M2AnalysisResult
 from requirementseeker_agent.rules import evaluate_consensus
@@ -69,6 +69,23 @@ def project(source: RunSource) -> Handoff:
         raise ValueError("consensus_source_mismatch")
     reviewed = None
     invalid_review = False
+    if source.context and not valid_context_refs(request, source.context):
+        if (
+            m2.status == "completed"
+            and decision
+            and decision.passed
+            and decision.cluster_id == source.context.cluster_id
+            and (receipt.status, receipt.reason) == ("incomplete", "invalid_context_refs")
+            and source.frame_review is None
+            and source.candidate is None
+            and receipt.intent is None
+            and source.previous == source.current
+            and not receipt.failed_gates
+        ):
+            return Handoff(
+                run_id=m2.run_id, status="incomplete", reason=receipt.reason, result=None
+            )
+        raise ValueError("invalid_context_refs")
     if source.frame_review is not None:
         if not source.context or not decision or not decision.passed or m2.status != "completed":
             raise ValueError("unexpected_frame_review")
@@ -100,6 +117,11 @@ def project(source: RunSource) -> Handoff:
         raise ValueError("candidate_source_mismatch")
     intent = receipt.intent
     status = receipt.status
+    if receipt.failed_gates and (status, receipt.reason) != (
+        "no_opportunity",
+        "opportunity_filtered",
+    ):
+        raise ValueError("filter_state_mismatch")
     outcome: Outcome
     if status in ("committed", "already_committed"):
         if (
@@ -146,7 +168,18 @@ def project(source: RunSource) -> Handoff:
                 raise ValueError("history_state_mismatch")
             # v1 没有“未判定可重试性”的 outcome；保留真实停止原因。
             return Handoff(run_id=m2.run_id, status=status, reason=receipt.reason, result=None)
-        if source.context and source.context.status == "media_required":
+        if status == "no_opportunity" and receipt.reason == "opportunity_filtered":
+            if (
+                not receipt.failed_gates
+                or not source.candidate
+                or not decision
+                or not decision.passed
+            ):
+                raise ValueError("filter_source_mismatch")
+            outcome = Rejected(
+                status="rejected", cluster_id=decision.cluster_id, reason_code=receipt.reason
+            )
+        elif source.context and source.context.status == "media_required":
             if (
                 m2.status != "completed"
                 or not m2.decisions

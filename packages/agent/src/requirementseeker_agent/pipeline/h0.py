@@ -5,7 +5,9 @@ import json
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
+
+from pydantic import Field
 
 from ..contracts.analysis import (
     ConsensusDecision,
@@ -18,7 +20,7 @@ from ..contracts.analysis import (
 from ..contracts.requests import AnalysisRequest
 from ..contracts.results import MergeEvidence, NewCandidate
 from ..rules import evaluate_consensus
-from .context import FrameReview, FrameReviewer, eligible_frames, recheck
+from .context import FrameReview, FrameReviewer, eligible_frames, recheck, valid_context_refs
 from .types import M2AnalysisResult
 
 
@@ -38,6 +40,9 @@ class OpportunityJudge(Protocol):
     ) -> Assessment: ...
 
 
+BusinessGate = Literal["software_deliverable", "light_operations", "specific_acquisition"]
+
+
 @dataclass(frozen=True)
 class FlowResult:
     status: Literal[
@@ -45,6 +50,7 @@ class FlowResult:
     ]
     reason: str
     intent: NewCandidate | MergeEvidence | None = None
+    failed_gates: Annotated[tuple[BusinessGate, ...], Field(exclude_if=lambda v: not v)] = ()
 
 
 @dataclass(frozen=True)
@@ -199,6 +205,8 @@ def run_h0(
         context = judge.assess_context(working.model_copy(deep=True), cluster.model_copy(deep=True))
         if context.cluster_id != cluster.cluster_id:
             return FlowResult("incomplete", "context_cluster_mismatch")
+        if not valid_context_refs(request, context):
+            return FlowResult("incomplete", "invalid_context_refs")
         if context.status == "context_sufficient":
             return FlowResult("incomplete", "unsupported_media_context")
         if context.status == "media_required":
@@ -237,14 +245,14 @@ def run_h0(
         )
     except (ValueError, OSError):
         return FlowResult("incomplete", "judge_failed")
-    if not all(
-        (
-            assessment.software_deliverable,
-            assessment.light_operations,
-            assessment.specific_acquisition,
-        )
-    ):
-        return FlowResult("no_opportunity", "opportunity_filtered")
+    gates: tuple[tuple[BusinessGate, bool], ...] = (
+        ("software_deliverable", assessment.software_deliverable),
+        ("light_operations", assessment.light_operations),
+        ("specific_acquisition", assessment.specific_acquisition),
+    )
+    failed_gates = tuple(name for name, passed in gates if not passed)
+    if failed_gates:
+        return FlowResult("no_opportunity", "opportunity_filtered", failed_gates=failed_gates)
     candidate = assessment.candidate
     if candidate.cluster_id != cluster.cluster_id or candidate.evidence != consensus.evidence:
         return FlowResult("incomplete", "candidate_evidence_mismatch")
