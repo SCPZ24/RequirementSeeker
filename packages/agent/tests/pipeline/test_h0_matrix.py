@@ -232,3 +232,97 @@ def test_version_change_recomputes_without_mutating_original(demo, version):
     assert [event.status for event in next_result.cache_events] == ["miss", "miss"]
     assert again.intent == receipt.intent and len(store.intents) == 1
     assert first.model_dump_json() == before
+
+
+@pytest.mark.parametrize("route", ["same", "different"])
+def test_changed_candidate_replays_original_receipt_across_versions(demo, tmp_path, route):
+    from m4_result_format import RunSource, project, write_handoff
+    from read_m4_results import read
+
+    router = demo.FixtureRouter()
+    router.answer = route
+    target = HistoricalOpportunity("original", "记录员", "导出", "逐条抄写", "本地工具")
+    store = MemoryIntentStore(history=(target,), history_revision="v1", history_judge=router)
+    traces = []
+
+    class VersionJudge(demo.ObservedJudge):
+        def assess_opportunity(self, req, cluster, consensus):
+            assessment = super().assess_opportunity(req, cluster, consensus)
+            if req.model.revision == "changed":
+                assessment.candidate.candidate_id = "current-id"
+                assessment.candidate.summary = "当前版本的导出推断"
+            return assessment
+
+    for rev in ("first", "changed"):
+        req = demo.demo_request()
+        req.run_id = req.model.revision = rev
+        req.history_revision = "v1"
+        manifest = demo.demo_manifest(req)
+        m2 = analyze_m2(
+            req,
+            manifest,
+            plan_sampling(manifest, req.comments, req.budget),
+            demo.RecordingGateway("valid_pipeline"),
+            InMemorySemanticCache(),
+        )
+        before = list(store.intents.values())
+        judge = VersionJudge(True)
+        receipt = run_h0(req, m2, judge, store)
+        traces.append(
+            RunSource(
+                request=req,
+                m2=m2,
+                candidate=judge.candidate,
+                context=judge.context,
+                target_ids=["original"],
+                history_complete=True,
+                receipt=receipt,
+                previous=before,
+                current=list(store.intents.values()),
+            )
+        )
+    write_handoff(tmp_path, traces)
+    first, replay = list(read(tmp_path))
+    assert replay["payload"] == first["payload"] and replay["status"] == "already_committed"
+    assert router.calls == len(store.intents) == 1
+    record = json.loads((tmp_path / "results.json").read_bytes())[1]["result"]
+    assert any(
+        n["title"] == "本次候选软件方向" and n["body"] == traces[1].candidate.summary
+        for n in record["inference_steps"]
+    )
+    if route == "same":
+        assert any(
+            n["title"] == "原提交追加判断" and n["body"] == traces[0].receipt.intent.merge.reason
+            for n in record["inference_steps"]
+        )
+    # 首次提交仍严格绑定本次候选，不能用重放规则接受改写后的首次回执。
+    bad = traces[0].model_copy(deep=True)
+    bad.candidate = bad.candidate.model_copy(deep=True)
+    bad.candidate.candidate_id = "uncommitted-id"
+    with pytest.raises(ValueError, match="merge_source_mismatch|new_candidate_mismatch"):
+        project(bad)
+    bad = traces[1].model_copy(deep=True)
+    bad.previous = bad.current = []
+    with pytest.raises(ValueError, match="replay_receipt_mismatch"):
+        project(bad)
+    # 即使旧回执和当前快照同时带相同的坏键，也须按本次可信来源重新验键。
+    for trace in traces:
+        bad = trace.model_copy(deep=True)
+        for intent in (bad.receipt.intent, *bad.previous, *bad.current):
+            intent.idempotency_key = "0" * 64
+        with pytest.raises(ValueError, match="intent_key_mismatch"):
+            project(bad)
+    # ID 不变而原文、作者、来源范围改变，也不能被一致的旧回执快照掩盖。
+    for field in ("text", "author_id", "platform", "video_id", "comment_id"):
+        bad = traces[1].model_copy(deep=True)
+        for intent in (bad.receipt.intent, *bad.previous, *bad.current):
+            evidence = intent.merge.evidence if route == "same" else intent.candidate.evidence
+            setattr(evidence[0], field, "douyin" if field == "platform" else "different")
+        with pytest.raises(ValueError, match="merge_source_mismatch|new_candidate_mismatch"):
+            project(bad)
+    if route == "same":
+        for targets in ([], ["original", "original"]):
+            bad = traces[1].model_copy(deep=True)
+            bad.target_ids = targets
+            with pytest.raises(ValueError, match="merge_source_mismatch"):
+                project(bad)

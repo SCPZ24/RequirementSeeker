@@ -1,5 +1,7 @@
 """本地合成交接格式。宿主提供可信运行记录；结果使用原 AnalysisResult v1。"""
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Literal
 
@@ -42,7 +44,7 @@ class RunSource(Contract):
     previous: list[NewCandidate | MergeEvidence]
     current: list[NewCandidate | MergeEvidence]
     frame_review: FrameReview | None = Field(default=None, exclude_if=lambda v: v is None)
-    explanation_version: Literal["observed-v1"] | None = Field(
+    explanation_version: Literal["observed-v1", "observed-v2"] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
 
@@ -152,20 +154,34 @@ def project(source: RunSource) -> Handoff:
             or intent not in source.previous
         ):
             raise ValueError("replay_receipt_mismatch")
+        # 重放绑定可信旧回执和完整来源，不把本次重新计算的候选当作原提交。
+        identity = [
+            m2.platform,
+            m2.video_id,
+            sorted(e.comment_id for e in source.candidate.evidence),
+        ]
+        expected_key = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
         if isinstance(intent, MergeEvidence):
             merge = intent.merge
             if (
                 source.target_ids.count(merge.target_opportunity_id) != 1
-                or merge.candidate_id != source.candidate.candidate_id
+                or (status == "committed" and merge.candidate_id != source.candidate.candidate_id)
                 or _ordered_evidence(merge.evidence) != _ordered_evidence(source.candidate.evidence)
             ):
                 raise ValueError("merge_source_mismatch")
-        elif intent.candidate.model_dump(exclude={"evidence"}) != source.candidate.model_dump(
-            exclude={"evidence"}
+            expected_key = hashlib.sha256(
+                json.dumps(["merge_evidence", merge.target_opportunity_id, expected_key]).encode()
+            ).hexdigest()
+        elif (
+            status == "committed"
+            and intent.candidate.model_dump(exclude={"evidence"})
+            != source.candidate.model_dump(exclude={"evidence"})
         ) or _ordered_evidence(intent.candidate.evidence) != _ordered_evidence(
             source.candidate.evidence
         ):
             raise ValueError("new_candidate_mismatch")
+        if intent.idempotency_key != expected_key:
+            raise ValueError("intent_key_mismatch")
         outcome = intent
         steps.append("dedup")
     else:
@@ -280,7 +296,11 @@ def project(source: RunSource) -> Handoff:
                 InferenceStep(
                     step_id="software-candidate",
                     kind="inference",
-                    title="候选软件方向",
+                    title=(
+                        "本次候选软件方向"
+                        if source.explanation_version == "observed-v2"
+                        else "候选软件方向"
+                    ),
                     body=source.candidate.summary,
                     evidence_refs=refs,
                 )
@@ -290,7 +310,12 @@ def project(source: RunSource) -> Handoff:
                 InferenceStep(
                     step_id="history-match",
                     kind="inference",
-                    title="追加判断",
+                    title=(
+                        "原提交追加判断"
+                        if source.explanation_version == "observed-v2"
+                        and status == "already_committed"
+                        else "追加判断"
+                    ),
                     body=intent.merge.reason,
                     evidence_refs=refs,
                 )
@@ -319,7 +344,7 @@ results_type = TypeAdapter(list[Handoff])
 
 def write_handoff(directory: Path, sources: list[RunSource]) -> None:
     """只写新结果对，保留旧失败/成功记录供宿主按运行号追溯。"""
-    records = [s.model_copy(update={"explanation_version": "observed-v1"}) for s in sources]
+    records = [s.model_copy(update={"explanation_version": "observed-v2"}) for s in sources]
     rows = [project(s) for s in records]
     directory.mkdir(parents=True, exist_ok=True)
     paths = (directory / "sources.json", directory / "results.json")
