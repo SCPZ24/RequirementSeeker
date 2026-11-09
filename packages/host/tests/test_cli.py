@@ -120,6 +120,66 @@ class CliTests(unittest.TestCase):
             (run / "results.json").write_text("[]")
             self.assertNotEqual(self.invoke("read", run).returncode, 0)
 
+    def test_stdout_failure_preserves_committed_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "runs"
+            # 只注入终端输出故障；安装包分析、提交与文件落盘均真实执行。
+            script = """
+import runpy, sys
+from unittest.mock import patch
+host, bundle, output = sys.argv[1:]
+main = runpy.run_path(host)["main"]
+sys.argv = [host, "--bundle", bundle, "run", "--case", "new", "--output", output]
+with patch("builtins.print", side_effect=OSError("synthetic stdout failure")):
+    try:
+        code = main()
+    except OSError:
+        code = 1
+raise SystemExit(code)
+"""
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-X",
+                    "utf8",
+                    "-c",
+                    script,
+                    str(HOST),
+                    str(BUNDLE),
+                    str(root),
+                ],
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            run = next(root.iterdir())
+            self.assertTrue((run / "receipt.json").is_file())
+            read = self.invoke("read", run)
+            self.assertEqual(read.returncode, 0, read.stderr)
+            self.assertEqual(json.loads(read.stdout)["status"], "committed")
+            self.assertFalse((run / "host-error.json").exists())
+
+    def test_complete_receipt_not_shadowed_by_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "runs"
+            self.assertEqual(self.invoke("run", "--case", "new", "--output", root).returncode, 0)
+            run = next(root.iterdir())
+            (run / "host-error.json").write_text(
+                json.dumps(
+                    dict(
+                        run_id=run.name,
+                        status="incomplete",
+                        reason="host_execution_failed",
+                    )
+                )
+            )
+            read = self.invoke("read", run)
+            self.assertEqual(read.returncode, 0, read.stderr)
+            self.assertEqual(json.loads(read.stdout)["status"], "committed")
+            (run / "results.json").write_text("[]")
+            self.assertNotEqual(self.invoke("read", run).returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

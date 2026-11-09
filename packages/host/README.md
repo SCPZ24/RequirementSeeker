@@ -25,4 +25,6 @@ run退出0表示committed/already_committed或合法no_opportunity；退出1表�
 & $python -I -B -X utf8 'E:/.codex/worktrees/b33-minimal-host/RequirementSeeker/packages/host/tests/test_cli.py' $hostCli $bundle
 ```
 
-6个测试方法含多个子场景，覆盖独立读取、重试上限/链路、非可重试停止、重放、旧目录逐字节保护、半写及篡改拒绝。验证记录与实际持久演示位于B33源码外证据目录，精确提交和C33独立结论见模块报告；此README不是C验收声明。不包含API/Web、调度、生产持久化、Key配置、真实模型、H1或macOS验收。
+8个测试方法含多个子场景，覆盖独立读取、重试上限/链路、非可重试停止、重放、旧目录逐字节保护、半写及篡改拒绝、完成回执后的输出故障及冲突错误文件。验证记录与实际持久演示位于B33源码外证据目录，精确提交和C33独立结论见模块报告；此README不是C验收声明。不包含API/Web、调度、生产持久化、Key配置、真实模型、H1或macOS验收。
+
+完成receipt存在时，read必须完整验证其身份、摘要及来源投影；旁路host-error不能遮蔽它，receipt损坏也不能降级绕过验证。完成落盘后的终端输出失败只影响命令交付，不生成相冲突的业务失败回执。

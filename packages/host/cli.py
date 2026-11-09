@@ -90,7 +90,7 @@ def read_run(directory):
     from read_m4_results import read
 
     attempt = json.loads((directory / "attempt.json").read_bytes())
-    if (directory / "host-error.json").is_file():
+    if not (directory / "receipt.json").exists() and (directory / "host-error.json").is_file():
         failure = json.loads((directory / "host-error.json").read_bytes())
         if (
             failure.get("run_id") != attempt["run_id"]
@@ -222,7 +222,6 @@ def execute(args, identity):
                     gateway_stages=gateway.stages,
                 ),
             )
-            print(json.dumps(read_run(directory), ensure_ascii=False))
         except Exception:
             # 失败/中断不造正式结果，不自动再试；原attempt与已写文件保留。
             write(
@@ -240,6 +239,8 @@ def execute(args, identity):
                 )
             )
             return 1
+        # 完成回执是业务事实；终端输出失败不能再写相冲突的执行失败回执。
+        print(json.dumps(read_run(directory), ensure_ascii=False))
         if args.case == "replay" and index == 0 and row["status"] == "committed":
             continue
         if row["outcome"] != "retryable_error":
