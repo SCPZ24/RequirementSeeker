@@ -51,3 +51,26 @@ $db='E:/RequirementSeeker-handoffs/B34-2026-11-09/example.sqlite'
 事务边界：B33提议文件在数据库事务之前生成；SQLite意图与宿主运行回执同一事务；宿主导出文件在事务之后生成。没有跨资源原子性。事务前中断可能只留下B33提议/attempt，不能声称已持久提交；数据库无该run_id时read拒绝，另建输出目录重试。数据库已提交而导出缺失时直接read原run_id；旧失败目录不会补写或覆盖。read退出0仅表示可读取，必须检查host_status；not_committed保留unknown/incomplete原原因，不能视为零机会或重试依据。
 
 B34测试入口为tests/test_persistence.py，参数为persistent.py绝对路径和bundle路径。覆盖独立进程新建/追加重放、人工备注后续修改保护、原payload与首次回执、回滚、新输出根保护、有限重试、提交后两类故障恢复及持久载荷损坏拒绝。DB/来源文件是受信本地存储，不提供签名或抵御全量协同篡改。仅本地串行固定合成，无多写者保证、远程生产DB、调度、API/Web、真实模型或多平台验收。
+
+## B35 最小本地机会管理
+
+本包入口为opportunities.py，活动计划B35-PLAN.md。沿用B34普通安装r1及SQLite持久意图；显式init初始化机会表，apply应用已提交意图，list/detail只读查询。Agent提议、宿主持久意图、机会应用是不同阶段；持久意图committed不代表已经应用为机会。
+
+```powershell
+$python='E:/RequirementSeeker-handoffs/B35-2026-11-10/venv/Scripts/python.exe'
+$entry='E:/.codex/worktrees/b35-local-opportunities/RequirementSeeker/packages/host/opportunities.py'
+$bundle='E:/RequirementSeeker-handoffs/B35-2026-11-10/unpacked/bundle'
+$db='E:/RequirementSeeker-handoffs/B35-2026-11-10/example.sqlite'
+& $python -I -B -X utf8 $entry --bundle $bundle --database $db init
+& $python -I -B -X utf8 'E:/.codex/worktrees/b35-local-opportunities/RequirementSeeker/packages/host/persistent.py' --bundle $bundle --database $db run --case new --output 'E:/RequirementSeeker-handoffs/B35-2026-11-10/example-first'
+# 使用上条输出的实际run_id替换RUN_ID。
+& $python -I -B -X utf8 $entry --bundle $bundle --database $db apply RUN_ID
+& $python -I -B -X utf8 $entry --bundle $bundle --database $db list
+& $python -I -B -X utf8 $entry --bundle $bundle --database $db detail past-export
+```
+
+init首次将固定受信history复制为本地机会；重复init不恢复被删除的目标，不覆盖人工字段。new生成local-来源键机会，append只追加受信既有past-export，业务数据不改，manual_stage/manual_note不自动更新。每个持久意图有一条来源关联，保存完整证据并关联原payload、首次run和应用状态。新建机会、来源关联、applications在单一SQLite事务内；跨进程/不同运行ID重放同一意图返回already_applied与original_receipt，不重复机会或来源。不同首次case演示使用不同数据库，避免同证据合法重放原意图。
+
+apply遇unknown/not_committed、坏目标、来源键/来源/应用映射冲突均拒绝。列表/详情会验证已有应用与受信原意图的绑定，显示机会数据、人工字段、来源和状态。退出0只指命令成功，持久意图仍须显式应用。只读查询不修复数据库。--fault stdout在事务提交后注入输出故障；命令退出1时应另进程list/detail查询已应用事实，再apply可确认重放。无新的导出文件，更不声称文件与数据库跨资源原子。
+
+SQL触发器在applications写入前RAISE(ABORT)测试回滚：此前新建机会及来源也回滚，旧记录保留。保存的B34运行目录和旧数据库不覆盖，演示只操作B35新库。六方法测试tests/test_opportunities.py参数为opportunities.py绝对路径及bundle绝对路径。范围仍Windows固定合成本地串行；不含孵化流程、人工编辑CLI、多写者、断电、生产调度/API/Web或真实输入模型。
