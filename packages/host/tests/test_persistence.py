@@ -99,6 +99,17 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(len(self.records("runs")), 1)
 
+    def test_corrupt_source_key_rejected_before_replay(self):
+        first = self.run_case("first")
+        self.assertEqual(first.returncode, 0)
+        run_id = json.loads(first.stdout)["run_id"]
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("UPDATE intents SET source_key=?", ("0" * 64,))
+        before = self.records("intents"), self.records("runs")
+        self.assertEqual(self.invoke("read", run_id).returncode, 1)
+        self.assertEqual(self.run_case("bad-replay").returncode, 1)
+        self.assertEqual((self.records("intents"), self.records("runs")), before)
+
     def test_postcommit_failures_recover_and_replay(self):
         for fault in ("file", "stdout"):
             with self.subTest(fault=fault):

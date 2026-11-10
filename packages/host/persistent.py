@@ -17,6 +17,12 @@ def encode(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
+def source_key(payload):
+    body = payload["candidate"] if payload["status"] == "new_candidate" else payload["merge"]
+    evidence = sorted(body["evidence"], key=lambda item: item["comment_id"])
+    return hashlib.sha256(encode(evidence).encode()).hexdigest()
+
+
 def open_database(path):
     db = sqlite3.connect(path)
     db.execute("PRAGMA synchronous=FULL")
@@ -61,7 +67,7 @@ def read_record(db, run_id):
         original = record["original_receipt"]
         first_id = original["run_id"] if original else run_id
         stored = db.execute(
-            "SELECT payload, source FROM intents WHERE original_run=?", (first_id,)
+            "SELECT payload, source, source_key FROM intents WHERE original_run=?", (first_id,)
         ).fetchone()
         if stored is None:
             raise ValueError("missing_persisted_intent")
@@ -73,6 +79,7 @@ def read_record(db, run_id):
             or source.receipt.intent is None
             or source.receipt.intent.model_dump(mode="json") != payload
             or record["payload"] != payload
+            or source_key(payload) != stored[2]
         ):
             raise ValueError("persistent_source_mismatch")
         if original and read_record(db, first_id) != original:
@@ -104,8 +111,7 @@ def persist(db, directory, fault):
         # 完整证据包括platform/video/author/text，不以候选措辞或case判定重复。
         payload = proposal["payload"]
         body = payload["candidate"] if payload["status"] == "new_candidate" else payload["merge"]
-        evidence = sorted(body["evidence"], key=lambda item: item["comment_id"])
-        key = hashlib.sha256(encode(evidence).encode()).hexdigest()
+        key = source_key(payload)
         if payload["status"] == "merge_evidence":
             target = db.execute(
                 "SELECT id FROM history WHERE id=?", (body["target_opportunity_id"],)
@@ -173,6 +179,9 @@ def main():
             else open_database(args.database)
         )
         with contextlib.closing(connection) as db:
+            # 先验证全体已存来源绑定，不能因坏索引查无记录而重复INSERT。
+            for (original_run,) in db.execute("SELECT original_run FROM intents").fetchall():
+                read_record(db, original_run)
             if args.command == "read":
                 print(encode(read_record(db, args.run_id)))
                 return 0
