@@ -1,6 +1,7 @@
 """B35固定合成机会应用，独立进程与真实SQLite事务。"""
 
 import json
+import runpy
 import sqlite3
 import subprocess
 import sys
@@ -54,6 +55,34 @@ class OpportunityTests(unittest.TestCase):
     def rows(self, table):
         with closing(sqlite3.connect(self.db)) as db:
             return db.execute("SELECT * FROM " + table).fetchall()
+
+    def test_failed_first_init_rolls_back_schema_and_retries(self):
+        seed = self.invoke(
+            "run",
+            "--case",
+            "append",
+            "--output",
+            self.root / "prior",
+            entry=HOST.with_name("persistent.py"),
+        )
+        self.assertEqual(seed.returncode, 0, seed.stderr)
+        before = [self.rows(table) for table in ("history", "intents", "runs")]
+
+        def deny_seed(action, table, *_):
+            if action == sqlite3.SQLITE_INSERT and table == "opportunities":
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        with closing(sqlite3.connect(self.db)) as db:
+            db.set_authorizer(deny_seed)
+            with self.assertRaises(sqlite3.DatabaseError):
+                runpy.run_path(str(HOST))["initialize"](db)
+        with closing(sqlite3.connect(self.db)) as db:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        self.assertEqual(tables, {"history", "intents", "runs"})
+        self.assertEqual(self.invoke("init").returncode, 0)
+        self.assertEqual([r[0] for r in self.rows("opportunities")], ["past-export"])
+        self.assertEqual([self.rows(table) for table in ("history", "intents", "runs")], before)
 
     def test_new_apply_replay_and_queries(self):
         run_id = self.seed()

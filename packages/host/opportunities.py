@@ -17,8 +17,10 @@ def history_data(data):
 
 
 def initialize(db):
-    existed = db.execute("SELECT 1 FROM sqlite_master WHERE name='opportunities'").fetchone()
     with db:
+        # sqlite3 不会为 CREATE TABLE 自动开始事务，首次建表和历史目标必须一起提交。
+        db.execute("BEGIN")
+        existed = db.execute("SELECT 1 FROM sqlite_master WHERE name='opportunities'").fetchone()
         db.execute(
             "CREATE TABLE IF NOT EXISTS opportunities (id TEXT PRIMARY KEY, data TEXT NOT NULL, "
             "manual_stage TEXT NOT NULL, manual_note TEXT NOT NULL)"
