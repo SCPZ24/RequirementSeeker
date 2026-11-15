@@ -1,0 +1,115 @@
+{
+  "run_id": "run-1",
+  "platform": "bilibili",
+  "video_id": "video-1",
+  "sampling_plan": {
+    "policy_version": "m2.0",
+    "manifest_id": "synthetic-h0",
+    "platform": "bilibili",
+    "video_id": "video-1",
+    "quality": {
+      "status": "usable",
+      "target_completion": 1,
+      "page_success_rate": 1,
+      "author_completeness": 1,
+      "duplicate_rate": 0
+    },
+    "population_size": 3,
+    "population_total_unknown": false,
+    "target_count": 3,
+    "selected_comment_ids": [
+      "comment-1",
+      "comment-2",
+      "comment-3"
+    ],
+    "selected_by_stratum": {
+      "top": [
+        "comment-1",
+        "comment-2",
+        "comment-3"
+      ]
+    },
+    "reason_codes": []
+  },
+  "signals": [
+    {
+      "signal_id": "sig-1",
+      "comment_id": "comment-1",
+      "kind": "need",
+      "summary": "想要可以按小时记录活动的软件。"
+    },
+    {
+      "signal_id": "sig-2",
+      "comment_id": "comment-2",
+      "kind": "need",
+      "summary": "希望用手机记录每小时做了什么。"
+    },
+    {
+      "signal_id": "sig-3",
+      "comment_id": "comment-3",
+      "kind": "need",
+      "summary": "需要每小时提醒我记录活动的工具。"
+    }
+  ],
+  "clusters": [
+    {
+      "cluster_id": "cluster-1",
+      "comment_ids": [
+        "comment-1",
+        "comment-2",
+        "comment-3"
+      ],
+      "summary": "按小时记录活动"
+    }
+  ],
+  "decisions": [
+    {
+      "cluster_id": "cluster-1",
+      "passed": true,
+      "reason_code": "independent_author_threshold_met",
+      "evidence": [
+        {
+          "platform": "bilibili",
+          "video_id": "video-1",
+          "comment_id": "comment-1",
+          "author_id": "user-1",
+          "text": "想要可以按小时记录活动的软件。"
+        },
+        {
+          "platform": "bilibili",
+          "video_id": "video-1",
+          "comment_id": "comment-2",
+          "author_id": "user-2",
+          "text": "希望用手机记录每小时做了什么。"
+        },
+        {
+          "platform": "bilibili",
+          "video_id": "video-1",
+          "comment_id": "comment-3",
+          "author_id": "user-3",
+          "text": "需要每小时提醒我记录活动的工具。"
+        }
+      ]
+    }
+  ],
+  "audits": [],
+  "cache_events": [],
+  "budget": {
+    "comments_consumed": 3,
+    "model_calls_consumed": 0,
+    "input_tokens_consumed": 0,
+    "output_tokens_consumed": 0,
+    "model_calls_reserved": 0,
+    "input_tokens_reserved": 0,
+    "output_tokens_reserved": 0
+  },
+  "completed_steps": [
+    "preprocess",
+    "signals",
+    "cluster",
+    "consensus"
+  ],
+  "status": "completed",
+  "error_code": null,
+  "exhausted_resource": null
+}

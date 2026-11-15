@@ -76,6 +76,15 @@ class InMemorySemanticCache:
     def __init__(self) -> None:
         self._entries: dict[CacheKey, _CacheEntry] = {}
 
+    def purge_expired(self, *, now: datetime) -> int:
+        """由宿主时钟触发，仅清理已到期的临时语义值，包括不再访问的键。"""
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("cache_time_requires_timezone")
+        expired = [key for key, entry in self._entries.items() if entry.expires_at <= now]
+        for key in expired:
+            del self._entries[key]
+        return len(expired)
+
     def put(
         self,
         key: CacheKey,

@@ -51,12 +51,31 @@ class SnapshotStore:
             key=lambda comment: (comment.first_collected_at, comment.comment_id),
         )
 
+    def purge_expired(self, now: datetime) -> None:
+        self._comments = {
+            key: item for key, item in self._comments.items() if item.expires_at > now
+        }
+
 
 def request_at(analysis_time: datetime, comments: list[Comment]) -> AnalysisRequest:
     data = request_data()
     data["analysis_time"] = analysis_time.isoformat()
     data["comments"] = [comment.model_dump(mode="json") for comment in comments]
     return parse_request(data)
+
+
+def test_simulated_cleanup_removes_expired_raw_comments_but_preserves_evidence():
+    request = parse_request()
+    store = SnapshotStore()
+    store.ingest(request.comments)
+    confirmed = evaluate_consensus(request, cluster_from(request)).model_copy(deep=True)
+    before = confirmed.model_dump_json()
+    deadline = request.comments[0].expires_at
+    # 让宿主替身先读有效集，再清理；回拨时钟不能让已删除正文重新出现。
+    assert not store.active_at(deadline)
+    store.purge_expired(deadline)
+    assert not store.active_at(request.analysis_time)
+    assert confirmed.model_dump_json() == before and len(confirmed.evidence) == 3
 
 
 def test_three_distinct_non_video_authors_pass() -> None:
